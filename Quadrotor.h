@@ -1,5 +1,7 @@
-// Author:
-// Description:
+// Author: Abdullah Altawaitan
+// Description: This research code is part of a long-term goal of
+// a fleet of cooperating Flexible Autonomous Machines operating in an uncertain Environment (FAME)
+// at Arizona State University
 
 #include "i2c_t3.h"
 #include "EEPROM.h"
@@ -10,7 +12,7 @@
 #include <cmath>
 
 // L3GD20 and L3G addresses
-#define L3GD20_ADDRESS  (0xD6 >> 1) // 107
+#define L3GD20_ADDRESS    (0xD6 >> 1) // 107
 #define L3G_CTRL_REG1     0x20
 #define L3G_CTRL_REG2     0x21
 #define L3G_CTRL_REG3     0x22
@@ -19,10 +21,10 @@
 #define L3G_FIFO_CTRL_REG 0x2E
 #define L3G_OUT_TEMP      0x26
 #define LSM303D_ADDRESS   0b0011101
-#define LSM303D_CTRL_REG0      0x1F
-#define LSM303D_CTRL_REG1      0x20
-#define LSM303D_CTRL_REG2      0x21
-#define LSM303D_OUT_X_L_A      0x28
+#define LSM303D_CTRL_REG0 0x1F
+#define LSM303D_CTRL_REG1 0x20
+#define LSM303D_CTRL_REG2 0x21
+#define LSM303D_OUT_X_L_A 0x28
 
 // Teensy 3.2 pins
 #define MOTOR1 20
@@ -54,13 +56,16 @@
 
 // Quadrotor modes
 #define START_MODE 0
-#define ARMING_MODE 1
-#define DISARMING_MODE 2
+#define TRANS_MODE 1
+#define ARMING_MODE 2
+#define TEMP_MODE 3
+#define DISARMING_MODE 4
 
 // Quadrotor Parameters
 #define m 0.558
 #define armlength 0.1215
 #define k_f 0.000001518 // Thrust coefficient
+#define k_m 0.00000001843 // Torque coefficient
 #define kappa 0.0127 // Ratio between thrust [N] and torque due to drag [N m] kappa = torque/thrust
 #define Ixx 0.002
 #define PWM_FACTOR 26.214 // 65535.0 / 2500.0
@@ -71,24 +76,24 @@
 #define dtOuter 0.01 // Period for 100Hz
 #define dtMicroseconds 2500
 
-// Inner loop
-#define kpPQRx 0.2 // 0.2
+// Inner-loop PID parameters
+#define kpPQRx 0.15 // 0.15
 #define kdPQRx 0.004// 0.004
 #define kiPQRx 0
-#define kpPQRy 0.2 // 0.2
+#define kpPQRy 0.15 // 0.15
 #define kdPQRy 0.004 // 0.004
 #define kiPQRy 0
-#define kpPQRz 0.1
-#define kdPQRz 0.001
+#define kpPQRz 0.03 // 0.03
+#define kdPQRz 0.0001 // 0.0001
 #define kiPQRz 0
-// Outer loop
-#define kpx 4 // 2
+// Outer-loop PID parameters
+#define kpx 5 // 5
 #define kdx 0
 #define kix 0
-#define kpy 4 // 10
+#define kpy 5 // 5
 #define kdy 0
 #define kiy 0
-#define kpz 2
+#define kpz 1 // 1
 #define kdz 0
 #define kiz 0
 
@@ -171,8 +176,6 @@ public:
   float PWM1, PWM2, PWM3, PWM4;
   float omega1, omega2, omega3, omega4;
   float omega1Squared, omega2Squared, omega3Squared, omega4Squared;
-
-
 
   // Methods
   void MotorInit(void);

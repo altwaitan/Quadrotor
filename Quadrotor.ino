@@ -1,4 +1,5 @@
-// Today July 21
+// Author: Abdullah Altawaitan
+// Description: Teensy 3.2 code
 #include "Quadrotor.h"
 
 Quadrotor Quad;
@@ -22,6 +23,8 @@ void setup()
    delay(200);
  }
    digitalWrite(LEDRed, LOW);
+
+   Serial.println("Now Ready!");
    Quad.loop_timer = micros();
 }
 
@@ -35,21 +38,9 @@ void loop()
   Quad.AltitudeControl();
   Quad.GenerateMotorCommands();
 
-  Serial.print(Quad.Xdes.psi);
-  Serial.print(" , ");
-  Serial.print(Quad.X.psi);
-  Serial.print(" , ");
-  Serial.print(Quad.channel.CH3);
-  Serial.print(" , ");
-  Serial.print(Quad.PWM2);
-  Serial.print(" , ");
-  Serial.print(Quad.PWM3);
-  Serial.print(" , ");
-  Serial.println(Quad.PWM4);
-  
-  
+
   while (micros() - Quad.loop_timer < dtMicroseconds);
-  //Reset the zero timer.
+  // Reset the zero timer
   Quad.loop_timer = micros();
 }
 

@@ -1,5 +1,6 @@
 #include "Quadrotor.h"
 
+// Motor initialization
 void Quadrotor::MotorInit(void)
 {
   pinMode(MOTOR1, OUTPUT);
@@ -30,6 +31,9 @@ void Quadrotor::MotorInit(void)
   error.psi_integral = 0;
 }
 
+// Sensor initialization and calibration
+// Source: Pololu Robotics and Electronics (https://github.com/pololu/lsm303-arduino)
+// Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
 void Quadrotor::SensorInit(void)
 {
   Wire.begin();
@@ -118,6 +122,8 @@ void Quadrotor::SensorInit(void)
   Serial.println("Sensor Calibration... Done!");
 }
 
+// Read Gyroscope Data
+// Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::L3GD20read(void)
 {
   L3GD20.read();
@@ -137,11 +143,11 @@ void Quadrotor::L3GD20read(void)
   gyro.raw.x = L3GD20.g.x;
   gyro.raw.y = L3GD20.g.y;
   gyro.raw.z = L3GD20.g.z;
-  //Temperature Compensation
+
+  // Temperature Compensation Model for L3GD20
   gyro.tempOffset.x = 0.00005023 * gyro_temp_4  - 0.008857 * gyro_temp_3 + 0.4812 * gyro_temp_2 - 6.678 * gyro_temp - 120.4;
   gyro.tempOffset.y = -0.00009043 * gyro_temp_4  + 0.0134 * gyro_temp_3 - 0.6597 * gyro_temp_2 + 6.861 * gyro_temp + 47.37;
   gyro.tempOffset.z = 0.00002922 * gyro_temp_4  - 0.004101 * gyro_temp_3 + 0.1754 * gyro_temp_2 - 4.791 * gyro_temp + 120.7;
-  //Offset Calculate
 
   gyro.calibrated.x = (gyro.raw.x - gyro.tempOffset.x) * 1.0 / 65.536;
   gyro.calibrated.y = (gyro.raw.y - gyro.tempOffset.y) * 1.0 / 65.536;
@@ -164,6 +170,9 @@ void Quadrotor::L3GD20read(void)
   }
 }
 
+// Gyroscope calibration
+// Source: Pololu Robotics and Electronics (https://github.com/pololu/lsm303-arduino)
+// Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
 void Quadrotor::L3GD20Calibration(void)
 {
   L3GD20.read();
@@ -180,11 +189,11 @@ void Quadrotor::L3GD20Calibration(void)
   gyro.raw.x = L3GD20.g.x;
   gyro.raw.y = L3GD20.g.y;
   gyro.raw.z = L3GD20.g.z;
-  //Temperature Compensation
+
+  // Temperature Compensation Model for L3GD20
   gyro.tempOffset.x = 0.00005023 * gyro_temp_4  - 0.008857 * gyro_temp_3 + 0.4812 * gyro_temp_2 - 6.678 * gyro_temp - 120.4;
   gyro.tempOffset.y = -0.00009043 * gyro_temp_4  + 0.0134 * gyro_temp_3 - 0.6597 * gyro_temp_2 + 6.861 * gyro_temp + 47.37;
   gyro.tempOffset.z = 0.00002922 * gyro_temp_4  - 0.004101 * gyro_temp_3 + 0.1754 * gyro_temp_2 - 4.791 * gyro_temp + 120.7;
-  //Offset Calculate
 
   gyro.calibrated.x = (gyro.raw.x - gyro.tempOffset.x) * 1.0 / 65.536;
   gyro.calibrated.y = (gyro.raw.y - gyro.tempOffset.y) * 1.0 / 65.536;
@@ -213,6 +222,9 @@ void Quadrotor::L3GD20Calibration(void)
   }
 }
 
+// Read Accelerometer Data
+// Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
+// Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::LSM303Dread(void)
 {
   LSM303D.read();
@@ -229,6 +241,9 @@ void Quadrotor::LSM303Dread(void)
   accel.calibrated.z = accel.afterOffset.x *  Acc_Cali.T[0][2] + accel.afterOffset.y *  Acc_Cali.T[1][2] + accel.afterOffset.z *  Acc_Cali.T[2][2];
 }
 
+// Accelerometer Calibration
+// Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
+// Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::LSM303DCalibration(uint8_t point)
 {
   LSM303D.read();
@@ -262,6 +277,9 @@ void Quadrotor::LSM303DCalibration(uint8_t point)
   }
 }
 
+// Accelerometer Offset Calculation
+// Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
+// Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::LSM303DOffsetRead(void)
 {
   uint8_t point;
@@ -296,6 +314,7 @@ void Quadrotor::LSM303DOffsetRead(void)
   Acc_Cali.T[2][2] = (Acc_Cali.g * (Acc_Cali.a[0][0] * Acc_Cali.a[1][1] - Acc_Cali.a[0][1] * Acc_Cali.a[1][0])) / (Acc_Cali.a[0][0] * Acc_Cali.a[1][1] * Acc_Cali.a[2][2] - Acc_Cali.a[0][0] * Acc_Cali.a[1][2] * Acc_Cali.a[2][1] - Acc_Cali.a[0][1] * Acc_Cali.a[1][0] * Acc_Cali.a[2][2] + Acc_Cali.a[0][1] * Acc_Cali.a[1][2] * Acc_Cali.a[2][0] + Acc_Cali.a[0][2] * Acc_Cali.a[1][0] * Acc_Cali.a[2][1] - Acc_Cali.a[0][2] * Acc_Cali.a[1][1] * Acc_Cali.a[2][0]);
 }
 
+// Second Order Low Pass Filter for Gyroscope data
 void Quadrotor::FilterInit(void)
 {
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &gyroFilterParameterX);
@@ -307,6 +326,9 @@ void Quadrotor::FilterInit(void)
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &accelFilterParameterZ);
 }
 
+// Sensor Estimation Methods
+// Method 1: AHRS
+// Method 2: Nonlinear Complementary Filter
 void Quadrotor::Estimation(int8_t method)
 {
   // Choosing one of the methods
@@ -324,6 +346,8 @@ void Quadrotor::Estimation(int8_t method)
   }
 }
 
+// Nonlinear Complementary Filter
+// Source: S. Tellex, A. Brown, and S. Lupashin. Estimation for Quadrotors. June 11, 2018.
 void Quadrotor::NonlinearComplementaryFilter(void)
 {
   Quadrotor::L3GD20read();
@@ -372,6 +396,9 @@ void Quadrotor::NonlinearComplementaryFilter(void)
   X.psi = yaw_predicted;
 }
 
+// Attitude and Heading Reference Systems (AHRS)
+// S. Madgwick (http://x-io.co.uk/res/doc/madgwick_internal_report.pdf)
+// Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::AHRS(void)
 {
   Quadrotor::L3GD20read();
@@ -498,9 +525,14 @@ void Quadrotor::MahonyAHRS(float gx, float gy, float gz, float ax, float ay, flo
   q.z *= recipNorm;
 }
 
+// Quadrotor States of Operation
 void Quadrotor::ArmingState(void)
 {
   if (QuadrotorState == START_MODE && channel.CH3 < 1020 && channel.CH4 < 1020)
+  {
+    QuadrotorState = TRANS_MODE;
+  }
+  if (QuadrotorState == TRANS_MODE && channel.CH4 > 1400 && channel.CH4 < 1800)
   {
     QuadrotorState = ARMING_MODE;
     // Reset variables
@@ -511,12 +543,21 @@ void Quadrotor::ArmingState(void)
     error.theta_integral = 0;
     error.psi_integral = 0;
   }
-  if (QuadrotorState == ARMING_MODE && channel.CH3 < 1020 && channel.CH4 > 1820)
+  if (QuadrotorState == ARMING_MODE && channel.CH3 < 1020 && channel.CH4 < 1020)
+  {
+    QuadrotorState = TEMP_MODE;
+  }
+  if (QuadrotorState == TEMP_MODE && channel.CH4 > 1400 && channel.CH4 < 1800)
+  {
+    QuadrotorState = START_MODE;
+  }
+  if (channel.CH3 < 1020 && channel.CH4 > 1800)
   {
     QuadrotorState = DISARMING_MODE;
   }
 }
 
+// Checking Battery Voltage
 void Quadrotor::BatteryVoltageCheck(void)
 {
   float v = (float)analogRead(A14) * 0.020462;
@@ -528,6 +569,7 @@ void Quadrotor::BatteryVoltageCheck(void)
   }
 }
 
+// RC Remote Signal Receiver
 void Quadrotor::Receiver(void)
 {
   // Remote range from 1000 to 1850
@@ -566,6 +608,8 @@ void Quadrotor::Receiver(void)
   Quadrotor::CONSTRAIN(Xdes.psi, -0.35, 0.35);
 }
 
+// Attitude Control (Outer-loop at 100Hz)
+// P Controller
 void Quadrotor::AttitudeControl(void)
 {
   outerCounter++;
@@ -581,15 +625,16 @@ void Quadrotor::AttitudeControl(void)
     Xdes.q = kpy * error.theta;
 
     error.psi = Xdes.psi - X.psi;
-    Xdes.r = kpz * error.r;
+    Xdes.r = kpz * error.psi;
   }
   Quadrotor::AngularRateControl();
 }
 
+// Angular Rate Control or Body Rate Control (Inner-loop at 400Hz)
+// PID Controller (PD Controller is sufficient)
 void Quadrotor::AngularRateControl(void)
 {
-
-  error.p = Xdes.p - X.p; //
+  error.p = Xdes.p - X.p;
   error.p_integral += error.p;
   error.p_integral = Quadrotor::CONSTRAIN(error.p_integral, -70, 70);
   U2 = error.p * kpPQRx + error.p_integral * kiPQRx * dt + (error.p - error.p_prev) * kdPQRx / dt;
@@ -612,9 +657,12 @@ void Quadrotor::AngularRateControl(void)
   U4 = Quadrotor::CONSTRAIN(U4, -500, 500);
 }
 
+// Thrust to PWM Signal Mapping
+// Source: M. Faessler, D. Falanga, and D. Scaramuzza, "Thrust Mixing, Saturation, and Body-Rate Control for Accurate Aggressive Quadrotor Flight," IEEE Robot. Autom. Lett. (RA-L), vol. 2, no. 2, pp. 476–482, Apr. 2017.
 void Quadrotor::AltitudeControl(void)
 {
-  float Thrust = (0.000006703 * channel.CH3 * channel.CH3) - (0.009669 * channel.CH3) + 2.554;
+  float Thrust = (0.000006419 * channel.CH3 * channel.CH3) + (-0.008914 * channel.CH3) + 2.06;
+  Thrust = Quadrotor::CONSTRAIN(Thrust, 0, 7);
   if (QuadrotorState == ARMING_MODE)
   {
     U1 = Thrust;
@@ -625,12 +673,14 @@ void Quadrotor::AltitudeControl(void)
   }
 }
 
+// Generate Motor Commands
+// Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::GenerateMotorCommands(void)
 {
-  omega1Squared = (1/(4*k_f)) * U1 + (1/(4*armlength*k_f)) * U2 + (1/(4*armlength*k_f)) * U3 + (1/(4*kappa)) * U4;
-  omega2Squared = (1/(4*k_f)) * U1 - (1/(4*armlength*k_f)) * U2 + (1/(4*armlength*k_f)) * U3 - (1/(4*kappa)) * U4;
-  omega3Squared = (1/(4*k_f)) * U1 - (1/(4*armlength*k_f)) * U2 - (1/(4*armlength*k_f)) * U3 + (1/(4*kappa)) * U4;
-  omega4Squared = (1/(4*k_f)) * U1 + (1/(4*armlength*k_f)) * U2 - (1/(4*armlength*k_f)) * U3 - (1/(4*kappa)) * U4;
+  omega1Squared = (1/(4*k_f)) * U1 + (1/(4*armlength*k_f)) * U2 + (1/(4*armlength*k_f)) * U3 - (1/(4*armlength*k_f)) * U4;
+  omega2Squared = (1/(4*k_f)) * U1 - (1/(4*armlength*k_f)) * U2 + (1/(4*armlength*k_f)) * U3 + (1/(4*armlength*k_f)) * U4;
+  omega3Squared = (1/(4*k_f)) * U1 - (1/(4*armlength*k_f)) * U2 - (1/(4*armlength*k_f)) * U3 - (1/(4*armlength*k_f)) * U4;
+  omega4Squared = (1/(4*k_f)) * U1 + (1/(4*armlength*k_f)) * U2 - (1/(4*armlength*k_f)) * U3 + (1/(4*armlength*k_f)) * U4;
   omega1Squared = Quadrotor::CONSTRAIN(omega1Squared, 0, 9000000);
   omega2Squared = Quadrotor::CONSTRAIN(omega2Squared, 0, 9000000);
   omega3Squared = Quadrotor::CONSTRAIN(omega3Squared, 0, 9000000);
@@ -653,7 +703,7 @@ void Quadrotor::GenerateMotorCommands(void)
     PWM3 = Quadrotor::CONSTRAIN(PWM3, 1080, 1600);
     PWM4 = Quadrotor::CONSTRAIN(PWM4, 1080, 1600);
   }
-  if (channel.CH3 < 1080)
+  if (QuadrotorState != ARMING_MODE || channel.CH3 < 1080)
   {
     PWM1 = 1000;
     PWM2 = 1000;
@@ -671,6 +721,7 @@ void Quadrotor::GenerateMotorCommands(void)
   Quadrotor::MotorRun();
 }
 
+// Run Motors
 void Quadrotor::MotorRun(void)
 {
   float input1 = PWM_FACTOR * PWM1;
@@ -683,6 +734,8 @@ void Quadrotor::MotorRun(void)
   analogWrite(MOTOR4, input4);
 }
 
+// Second Order Low Pass Filter
+// Source: Leonard Hall (https://github.com/PX4/Firmware) PX4/Firmware/src/lib/mathlib/math/filter/LowPassFilter2p.cpp
 void Quadrotor::SecondOrderLowPassFilter(float sample_freq, float cutoff_freq, struct _FILTER *input_IIR)
 {
   if (cutoff_freq <= 0.0f) {
@@ -699,6 +752,8 @@ void Quadrotor::SecondOrderLowPassFilter(float sample_freq, float cutoff_freq, s
   input_IIR->a2 = (1.0f - 2.0f * cosf(PI / 4.0f) * ohm + ohm * ohm) / c;
 }
 
+// Second Order Low Pass Filter Apply
+// Source: Leonard Hall (https://github.com/PX4/Firmware) PX4/Firmware/src/lib/mathlib/math/filter/LowPassFilter2p.cpp
 float Quadrotor::SecondOrderLowPassFilterApply(float cutoff_freq, float sample, struct _FILTER *input_IIR)
 {
   if (cutoff_freq <= 0.0f) {
@@ -716,6 +771,7 @@ float Quadrotor::SecondOrderLowPassFilterApply(float cutoff_freq, float sample, 
   return output;
 }
 
+// Constrain Data Between Min and Max Values
 float Quadrotor::CONSTRAIN(float x, float min, float max)
 {
   if (x < min) x = min;
@@ -723,6 +779,7 @@ float Quadrotor::CONSTRAIN(float x, float min, float max)
   return x;
 }
 
+// Invert Square Root
 float Quadrotor::invSqrt(float number) {
   long i;
   float x2, y;
