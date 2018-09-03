@@ -734,6 +734,55 @@ void Quadrotor::MotorRun(void)
   analogWrite(MOTOR4, input4);
 }
 
+// XbeeZigbee Send Data Wirelessly
+// Source: (https://github.com/mattzzw/Arduino-mpu6050)
+void Quadrotor::XbeeZigbeeSend(void)
+{
+  if (Serial1.available())
+  {
+    char command_received;
+    command_received = Serial1.read();
+    if (command_received == '.')
+    {
+      Serial1.print(X.phi, 2);
+      Serial1.print(", ");
+      Serial1.print(X.theta, 2);
+      Serial1.print(", ");
+      Serial1.println(X.psi, 2);
+    }
+  }
+}
+
+// XbeeZigbee Receive Data Wirelessly
+// Source: (http://forum.arduino.cc/index.php?topic=396450)
+void Quadrotor::XbeeZigbeeReceive(void)
+{
+  // Update at frequecy of 50 Hz
+  Xbee_couter++;
+  if (Xbee_couter >= 8)
+  {
+    Xbee_couter = 0;
+    if (newData == true)
+    {
+      strcpy(tempChars, receivedChars);
+
+      // Parse data
+      char * strtokIndx; // this is used by strtok() as an index
+
+      strtokIndx = strtok(tempChars,","); // get the first part - the string
+      float1 = atof(strtokIndx); // value 1
+
+      strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+      float2 = atof(strtokIndx);     // value 2
+
+      strtokIndx = strtok(NULL, ",");
+      float3 = atof(strtokIndx);     // value 3
+
+      newData = false;
+    }
+  }
+}
+
 // Second Order Low Pass Filter
 // Source: Leonard Hall (https://github.com/PX4/Firmware) PX4/Firmware/src/lib/mathlib/math/filter/LowPassFilter2p.cpp
 void Quadrotor::SecondOrderLowPassFilter(float sample_freq, float cutoff_freq, struct _FILTER *input_IIR)

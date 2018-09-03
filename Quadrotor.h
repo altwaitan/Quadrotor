@@ -177,6 +177,16 @@ public:
   float omega1, omega2, omega3, omega4;
   float omega1Squared, omega2Squared, omega3Squared, omega4Squared;
 
+  // Xbee Zigbee variables
+  const byte numChars = 32;
+  char receivedChars[32];
+  char tempChars[32];
+  float float1 = 0.0;
+  float float2 = 0.0;
+  float float3 = 0.0;
+  boolean newData = false;
+  uint8_t Xbee_couter = 0;
+
   // Methods
   void MotorInit(void);
   void SensorInit(void);
@@ -199,6 +209,8 @@ public:
   void AltitudeControl(void);
   void GenerateMotorCommands(void);
   void MotorRun(void);
+  void XbeeZigbeeSend(void);
+  void XbeeZigbeeReceive(void);
   void SecondOrderLowPassFilter(float sample_freq, float cutoff_freq, struct _FILTER *input_IIR);
   float SecondOrderLowPassFilterApply(float cutoff_freq, float sample, struct _FILTER *input_IIR);
   float CONSTRAIN(float x, float min, float max);
