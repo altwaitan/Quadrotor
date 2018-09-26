@@ -15,13 +15,13 @@ void setup()
   Quad.FilterInit();
   delay(200);
  // Check the position of the reciver before starting
-while (Quad.channel.CH3 < 990 || Quad.channel.CH3 > 1020 || Quad.channel.CH4 < 1400)
-{
-  digitalWrite(LEDRed, LOW);
-  delay(200);
-  digitalWrite(LEDRed, LOW);
-  delay(200);
-}
+ while (Quad.channel.CH3 < 990 || Quad.channel.CH3 > 1020 || Quad.channel.CH4 < 1400)
+ {
+   digitalWrite(LEDRed, LOW);
+   delay(200);
+   digitalWrite(LEDRed, LOW);
+   delay(200);
+ }
    digitalWrite(LEDRed, LOW);
 
    Serial.println("Now Ready!");
@@ -39,7 +39,6 @@ void loop()
   Quad.GenerateMotorCommands();
   //Quad.XbeeZigbeeSend();
   //Quad.XbeeZigbeeReceive();
-
 
   while (micros() - Quad.loop_timer < dtMicroseconds);
   // Reset the zero timer
@@ -113,41 +112,41 @@ void Receiver()
       }
 }
 
-void serialEvent1()
-{
-  static boolean recvInProgress = false;
-  static byte ndx = 0;
-  char startMarker = '<';
-  char endMarker = '>';
-  char rc;
-
-  while (Serial1.available() > 0 && Quad.newData == false)
-  {
-      rc = Serial1.read();
-
-      if (recvInProgress == true)
-      {
-        if (rc != endMarker)
-        {
-          Quad.receivedChars[ndx] = rc;
-          ndx++;
-          if (ndx >= Quad.numChars)
-          {
-            ndx = Quad.numChars - 1;
-          }
-        }
-        else
-        {
-          Quad.receivedChars[ndx] = '\0'; // terminate the string
-          recvInProgress = false;
-          ndx = 0;
-          Quad.newData = true;
-        }
-      }
-
-      else if (rc == startMarker)
-      {
-        recvInProgress = true;
-      }
-  }
-}
+// void serialEvent1()
+// {
+//   static boolean recvInProgress = false;
+//   static byte ndx = 0;
+//   char startMarker = '<';
+//   char endMarker = '>';
+//   char rc;
+//
+//   while (Serial1.available() > 0 && Quad.newData == false)
+//   {
+//       rc = Serial1.read();
+//
+//       if (recvInProgress == true)
+//       {
+//         if (rc != endMarker)
+//         {
+//           Quad.receivedChars[ndx] = rc;
+//           ndx++;
+//           if (ndx >= Quad.numChars)
+//           {
+//             ndx = Quad.numChars - 1;
+//           }
+//         }
+//         else
+//         {
+//           Quad.receivedChars[ndx] = '\0'; // terminate the string
+//           recvInProgress = false;
+//           ndx = 0;
+//           Quad.newData = true;
+//         }
+//       }
+//
+//       else if (rc == startMarker)
+//       {
+//         recvInProgress = true;
+//       }
+//   }
+// }

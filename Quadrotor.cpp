@@ -596,22 +596,23 @@ void Quadrotor::Receiver(void)
   }
   Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
 
-  Xdes.psi = 0;
+  RCYawRate = 0;
   if (channel.CH4 > 1433) {
     float psi_desired_degree = (channel.CH4 - 1433) / 20;
-    Xdes.psi = psi_desired_degree * (PI / 180.0);
+    RCYawRate = psi_desired_degree * (PI / 180.0);
   }
   else if (channel.CH4 < 1417) {
     float psi_desired_degree = (channel.CH4 - 1417) / 20;
-    Xdes.psi = psi_desired_degree * (PI / 180.0);
+    RCYawRate = psi_desired_degree * (PI / 180.0);
   }
-  Quadrotor::CONSTRAIN(Xdes.psi, -0.35, 0.35);
+  Quadrotor::CONSTRAIN(RCYawRate, -0.35, 0.35);
 }
 
 // Attitude Control (Outer-loop at 100Hz)
 // P Controller
 void Quadrotor::AttitudeControl(void)
 {
+  static float yaw_target = 0;
   outerCounter++;
   if (outerCounter >= 4)
   {
@@ -620,12 +621,26 @@ void Quadrotor::AttitudeControl(void)
 
     error.phi = Xdes.phi - X.phi;
     Xdes.p = kpx * error.phi;
+    Xdes.p = Quadrotor::CONSTRAIN(Xdes.p, -4.4, 4.4);
 
     error.theta = Xdes.theta - X.theta;
     Xdes.q = kpy * error.theta;
+    Xdes.q = Quadrotor::CONSTRAIN(Xdes.q, -4.4, 4.4);
 
-    error.psi = Xdes.psi - X.psi;
+    // Note: Currently not used with Radio Control (RC)
+    error.psi = yaw_target - X.psi;
+    (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
     Xdes.r = kpz * error.psi;
+    Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -2*PI, 2*PI);
+    if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
+    {
+      Xdes.r = RCYawRate;
+      yaw_target = X.psi;
+    }
+    if (channel.CH3 < 1080)
+    {
+      yaw_target = X.psi;
+    }
   }
   Quadrotor::AngularRateControl();
 }
@@ -646,6 +661,7 @@ void Quadrotor::AngularRateControl(void)
   U3 = error.q * kpPQRy + error.q_integral * kiPQRy * dt + (error.q - error.q_prev) * kdPQRy / dt;
   error.q_prev = error.q;
 
+  // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
   error.r = Xdes.r - X.r;
   error.r_integral += error.r;
   error.r_integral = Quadrotor::CONSTRAIN(error.r_integral, -70, 70);
@@ -702,6 +718,10 @@ void Quadrotor::GenerateMotorCommands(void)
     PWM2 = Quadrotor::CONSTRAIN(PWM2, 1080, 1600);
     PWM3 = Quadrotor::CONSTRAIN(PWM3, 1080, 1600);
     PWM4 = Quadrotor::CONSTRAIN(PWM4, 1080, 1600);
+    volt1 = (PWM1 - 1000)/1000 * voltage;
+    volt2 = (PWM2 - 1000)/1000 * voltage;
+    volt3 = (PWM3 - 1000)/1000 * voltage;
+    volt4 = (PWM4 - 1000)/1000 * voltage;
   }
   if (QuadrotorState != ARMING_MODE || channel.CH3 < 1080)
   {
@@ -744,11 +764,11 @@ void Quadrotor::XbeeZigbeeSend(void)
     command_received = Serial1.read();
     if (command_received == '.')
     {
-      Serial1.print(X.phi, 2);
+      Serial1.print(U1, 2);
       Serial1.print(", ");
-      Serial1.print(X.theta, 2);
+      Serial1.print(PWM1, 2);
       Serial1.print(", ");
-      Serial1.println(X.psi, 2);
+      Serial1.println(omega1, 2);
     }
   }
 }

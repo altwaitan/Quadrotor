@@ -77,23 +77,23 @@
 #define dtMicroseconds 2500
 
 // Inner-loop PID parameters
-#define kpPQRx 0.15 // 0.15
-#define kdPQRx 0.004// 0.004
-#define kiPQRx 0
-#define kpPQRy 0.15 // 0.15
-#define kdPQRy 0.004 // 0.004
-#define kiPQRy 0
-#define kpPQRz 0.03 // 0.03
-#define kdPQRz 0.0001 // 0.0001
+#define kpPQRx 0.15 
+#define kdPQRx 0.004
+#define kiPQRx 0.1
+#define kpPQRy 0.15
+#define kdPQRy 0.004
+#define kiPQRy 0.1
+#define kpPQRz 0.15
+#define kdPQRz 0.0001
 #define kiPQRz 0
 // Outer-loop PID parameters
-#define kpx 5 // 5
+#define kpx 7
 #define kdx 0
 #define kix 0
-#define kpy 5 // 5
+#define kpy 7
 #define kdy 0
 #define kiy 0
-#define kpz 1 // 1
+#define kpz 10
 #define kdz 0
 #define kiz 0
 
@@ -171,9 +171,11 @@ public:
   bool lastChannel1, lastChannel2, lastChannel3, lastChannel4;
   unsigned long receiverChannelTimer1, receiverChannelTimer2, receiverChannelTimer3, receiverChannelTimer4;
   unsigned long current_time;
+  float RCYawRate;
 
   // Motor variables
   float PWM1, PWM2, PWM3, PWM4;
+  float volt1, volt2, volt3, volt4;
   float omega1, omega2, omega3, omega4;
   float omega1Squared, omega2Squared, omega3Squared, omega4Squared;
 
