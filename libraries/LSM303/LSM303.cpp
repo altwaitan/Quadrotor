@@ -221,7 +221,7 @@ void LSM303::enableDefault(void)
 
     // 0x57 = 0b01010111
     // AODR = 0101 (50 Hz ODR); AZEN = AYEN = AXEN = 1 (all axes enabled)
-    writeReg(CTRL1, 0x87);
+    writeReg(CTRL1, 0x47);
 
     // Magnetometer
 
@@ -242,8 +242,8 @@ void LSM303::enableDefault(void)
     // Accelerometer
 
     // 0x08 = 0b00001000
-    // FS = 00 (+/- 2 g full scale); HR = 1 (high resolution enable)
-    writeAccReg(CTRL_REG4_A, 0x08);
+    // FS = 01 (+/- 4g full scale); HR = 1 (high resolution enable)
+    writeAccReg(CTRL_REG4_A, 0x18);
 
     // 0x47 = 0b01000111
     // ODR = 0100 (50 Hz ODR); LPen = 0 (normal mode); Zen = Yen = Xen = 1 (all axes enabled)
@@ -267,13 +267,13 @@ void LSM303::enableDefault(void)
   {
     // Accelerometer
 
-    // 0x00 = 0b00000000
-    // FS = 00 (+/- 2 g full scale)
-    writeAccReg(CTRL_REG4_A, 0x00);
+    // 0x08 = 0b00001000
+    // FS = 01 (+/- 4g full scale); HR = 1 (high resolution enable)
+    writeAccReg(CTRL_REG4_A, 0x18);
 
-    // 0x27 = 0b00100111
-    // PM = 001 (normal mode); DR = 00 (50 Hz ODR); Zen = Yen = Xen = 1 (all axes enabled)
-    writeAccReg(CTRL_REG1_A, 0x27);
+    // 0x47 = 0b01000111
+    // ODR = 0100 (50 Hz ODR); LPen = 0 (normal mode); Zen = Yen = Xen = 1 (all axes enabled)
+    writeAccReg(CTRL_REG1_A, 0x47);
 
     // Magnetometer
 

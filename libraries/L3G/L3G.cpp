@@ -58,8 +58,8 @@ void L3G::enableDefault(void)
 {
   // 0x0F = 0b00001111
   // Normal power mode, all axes enabled
-  writeReg(L3G_CTRL_REG1, 0xAF);
-  writeReg(L3G_CTRL_REG4, 0x10); // +- 2000 dps range
+  writeReg(L3G_CTRL_REG1, 0xEF); // ODR (380Hz),  Cut-Off (50Hz)
+  writeReg(L3G_CTRL_REG4, 0x20); // +- 2000 dps range
   writeReg(L3G_FIFO_CTRL_REG, 0x00);
 
 }

@@ -7,24 +7,8 @@
 #include "EEPROM.h"
 #include "Arduino.h"
 #include "Quaternion.h"
-#include <L3G.h>
-#include <LSM303.h>
+#include "IMU.h"
 #include <cmath>
-
-// L3GD20 and L3G addresses
-#define L3GD20_ADDRESS    (0xD6 >> 1) // 107
-#define L3G_CTRL_REG1     0x20
-#define L3G_CTRL_REG2     0x21
-#define L3G_CTRL_REG3     0x22
-#define L3G_CTRL_REG4     0x23
-#define L3G_CTRL_REG5     0x24
-#define L3G_FIFO_CTRL_REG 0x2E
-#define L3G_OUT_TEMP      0x26
-#define LSM303D_ADDRESS   0b0011101
-#define LSM303D_CTRL_REG0 0x1F
-#define LSM303D_CTRL_REG1 0x20
-#define LSM303D_CTRL_REG2 0x21
-#define LSM303D_OUT_X_L_A 0x28
 
 // Teensy 3.2 pins
 #define MOTOR1 20
@@ -77,20 +61,20 @@
 #define dtMicroseconds 2500
 
 // Inner-loop PID parameters
-#define kpPQRx 0.15 
+#define kpPQRx 0.1
 #define kdPQRx 0.004
-#define kiPQRx 0.1
-#define kpPQRy 0.15
+#define kiPQRx 0.8
+#define kpPQRy 0.1
 #define kdPQRy 0.004
-#define kiPQRy 0.1
-#define kpPQRz 0.15
-#define kdPQRz 0.0001
-#define kiPQRz 0
+#define kiPQRy 0.8
+#define kpPQRz 0.1
+#define kdPQRz 0.001 
+#define kiPQRz 0.2
 // Outer-loop PID parameters
-#define kpx 7
+#define kpx 10
 #define kdx 0
 #define kix 0
-#define kpy 7
+#define kpy 10
 #define kdy 0
 #define kiy 0
 #define kpz 10
@@ -132,12 +116,11 @@ public:
     int16_t accel_raw[6][3], accel_timer = 0;
     int32_t accel_calitmpx, accel_calitmpy, accel_calitmpz;
     float accel_offset[3], a[3][3], T[3][3];
-    float g = 8192; // for +-4g range
+    float g = 8196.72; // for +-4g range
   };
 
   // Sensor variables
-  L3G L3GD20;
-  LSM303 LSM303D;
+  IMU imu;
   _GYRO gyro;
   _ACCEL accel;
   _FILTER gyroFilterParameterX, gyroFilterParameterY, gyroFilterParameterZ, accelFilterParameterX, accelFilterParameterY, accelFilterParameterZ;
@@ -151,6 +134,11 @@ public:
   float GyroCollection[3] = {0, 0, 0};
   float integralFBx = 0.0f,  integralFBy = 0.0f, integralFBz = 0.0f;
   Quaternion quat;
+  int16_t NowUpdate = 0;
+  int16_t LastUpdate = 0;
+  float eInt[3] = {0.0f, 0.0f, 0.0f};
+  float temp;
+
 
   // Quadrotor variables
   _STATE X;
@@ -165,6 +153,7 @@ public:
   // Control variables
   float U1, U2, U3, U4; // Inner loop
   uint8_t outerCounter = 0;
+  uint8_t YawLock = 0;
 
   // Receiver variables
   _CH channel;
@@ -188,15 +177,15 @@ public:
   float float3 = 0.0;
   boolean newData = false;
   uint8_t Xbee_couter = 0;
+  uint8_t Xbee_couter2 = 0;
 
   // Methods
   void MotorInit(void);
   void SensorInit(void);
-  void L3GD20read(void);
-  void L3GD20Calibration(void);
-  void LSM303Dread(void);
-  void LSM303DCalibration(uint8_t point);
-  void LSM303DOffsetRead(void);
+  void MPU6050read(void);
+  void GyroCalibration(void);
+  void AccelCalibration(uint8_t point);
+  void AccelOffsetRead(void);
   void FilterInit(void);
   void Estimation(int8_t method);
   void NonlinearComplementaryFilter(void);

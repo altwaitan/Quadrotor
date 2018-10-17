@@ -40,29 +40,13 @@ void Quadrotor::SensorInit(void)
   Wire.setRate(I2C_RATE_2000);
   delay(200);
   // Gyroscope initialization
-  if (!L3GD20.init())
-  {
-    Serial.println("Failed to autodetect gyro type!");
-    while (1);
-  }
-  L3GD20.enableDefault();
-
-  // Accelerometer initialization
-  LSM303D.init();
-  LSM303D.enableDefault();
+  imu.Init();
   delay(200);
 
   // Sensor calibration
   Serial.println("Sensor Calibration...");
   Serial.println("Place Quadrotor on level.");
   delay(200);
-
-  // Gyroscope calibration
-  while (gyro_calibration_done == 0)
-  {
-    Quadrotor::L3GD20Calibration();
-  }
-
   // Accelerometer calibration
   Serial.println("If you enter 'a', the calibration will get started.");
   delay(3000);
@@ -74,7 +58,7 @@ void Quadrotor::SensorInit(void)
     delay(10000);
     while (accel_calibration_done == 0)
     {
-      Quadrotor::LSM303DCalibration(4);
+      Quadrotor::AccelCalibration(4);
     }
     accel_calibration_done = 0;
 
@@ -82,7 +66,7 @@ void Quadrotor::SensorInit(void)
     delay(10000);
     while (accel_calibration_done == 0)
     {
-      Quadrotor::LSM303DCalibration(5);
+      Quadrotor::AccelCalibration(5);
     }
     accel_calibration_done = 0;
 
@@ -90,7 +74,7 @@ void Quadrotor::SensorInit(void)
     delay(10000);
     while (accel_calibration_done == 0)
     {
-      Quadrotor::LSM303DCalibration(0);
+      Quadrotor::AccelCalibration(3);
     }
     accel_calibration_done = 0;
 
@@ -98,7 +82,7 @@ void Quadrotor::SensorInit(void)
     delay(10000);
     while (accel_calibration_done == 0)
     {
-      Quadrotor::LSM303DCalibration(1);
+      Quadrotor::AccelCalibration(2);
     }
     accel_calibration_done = 0;
 
@@ -106,7 +90,7 @@ void Quadrotor::SensorInit(void)
     delay(10000);
     while (accel_calibration_done == 0)
     {
-      Quadrotor::LSM303DCalibration(2);
+      Quadrotor::AccelCalibration(0);
     }
     accel_calibration_done = 0;
 
@@ -114,50 +98,37 @@ void Quadrotor::SensorInit(void)
     delay(10000);
     while (accel_calibration_done == 0)
     {
-      Quadrotor::LSM303DCalibration(3);
+      Quadrotor::AccelCalibration(1);
     }
     accel_calibration_done = 1;
   }
-  Quadrotor::LSM303DOffsetRead();
+
+  Quadrotor::AccelOffsetRead();
+  accel_calibration_done = 1;
+  while (gyro_calibration_done == 0 && gyro_calibration_counter <= 1500)
+  {
+    gyro_calibration_counter++;
+    GyroCalibration();
+  }
   Serial.println("Sensor Calibration... Done!");
 }
 
 // Read Gyroscope Data
 // Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
-void Quadrotor::L3GD20read(void)
+void Quadrotor::MPU6050read(void)
 {
-  L3GD20.read();
-  float gyro_temp = L3GD20.t * -1.0 + 40;
-  if (gyro_temp < - 180 && gyro_temp + 256 >= 40)
-    gyro_temp = gyro_temp + 256;
-  if (gyro_temp < 15)
-    gyro_temp = 15;
-  if (gyro_temp > 65)
-    gyro_temp = 65;
+  imu.read();
+  accel.raw.x = imu.a.x;
+  accel.raw.y = imu.a.y;
+  accel.raw.z = imu.a.z;
+  gyro.raw.x = imu.g.x;
+  gyro.raw.y = imu.g.y;
+  gyro.raw.z = imu.g.z;
 
-  float gyro_temp_4, gyro_temp_3, gyro_temp_2;
-  gyro_temp_4 = gyro_temp * gyro_temp * gyro_temp * gyro_temp;
-  gyro_temp_3 = gyro_temp * gyro_temp * gyro_temp;
-  gyro_temp_2 = gyro_temp * gyro_temp;
+  gyro.calibrated.x = (gyro.raw.x - gyro.tempOffset.x);
+  gyro.calibrated.y = (gyro.raw.y - gyro.tempOffset.y);
+  gyro.calibrated.z = (gyro.raw.z - gyro.tempOffset.z);
 
-  gyro.raw.x = L3GD20.g.x;
-  gyro.raw.y = L3GD20.g.y;
-  gyro.raw.z = L3GD20.g.z;
-
-  // Temperature Compensation Model for L3GD20
-  gyro.tempOffset.x = 0.00005023 * gyro_temp_4  - 0.008857 * gyro_temp_3 + 0.4812 * gyro_temp_2 - 6.678 * gyro_temp - 120.4;
-  gyro.tempOffset.y = -0.00009043 * gyro_temp_4  + 0.0134 * gyro_temp_3 - 0.6597 * gyro_temp_2 + 6.861 * gyro_temp + 47.37;
-  gyro.tempOffset.z = 0.00002922 * gyro_temp_4  - 0.004101 * gyro_temp_3 + 0.1754 * gyro_temp_2 - 4.791 * gyro_temp + 120.7;
-
-  gyro.calibrated.x = (gyro.raw.x - gyro.tempOffset.x) * 1.0 / 65.536;
-  gyro.calibrated.y = (gyro.raw.y - gyro.tempOffset.y) * 1.0 / 65.536;
-  gyro.calibrated.z = (gyro.raw.z - gyro.tempOffset.z) * 1.0 / 65.536;
-
-  if (gyro_calibration_done == 0 && gyro_calibration_counter <= 1500)
-  {
-    gyro_calibration_counter++;
-    L3GD20Calibration();
-  }
   if (gyro_calibration_done == 1)
   {
     gyro.calibrated.x = gyro.calibrated.x - gyro.gyroOffset.x;
@@ -168,89 +139,48 @@ void Quadrotor::L3GD20read(void)
     gyroAngle.y += gyro.calibrated.y * dt;
     gyroAngle.z += gyro.calibrated.z * dt;
   }
+
+  if (accel_calibration_done == 1)
+  {
+    accel.afterOffset.x = (float)accel.raw.x - Acc_Cali.accel_offset[0];
+    accel.afterOffset.y = (float)accel.raw.y - Acc_Cali.accel_offset[1];
+    accel.afterOffset.z = (float)accel.raw.z - Acc_Cali.accel_offset[2];
+
+    accel.calibrated.x = accel.afterOffset.x *  Acc_Cali.T[0][0] + accel.afterOffset.y *  Acc_Cali.T[1][0] + accel.afterOffset.z *  Acc_Cali.T[2][0];
+    accel.calibrated.y = accel.afterOffset.x *  Acc_Cali.T[0][1] + accel.afterOffset.y *  Acc_Cali.T[1][1] + accel.afterOffset.z *  Acc_Cali.T[2][1];
+    accel.calibrated.z = accel.afterOffset.x *  Acc_Cali.T[0][2] + accel.afterOffset.y *  Acc_Cali.T[1][2] + accel.afterOffset.z *  Acc_Cali.T[2][2];
+  }
 }
 
 // Gyroscope calibration
 // Source: Pololu Robotics and Electronics (https://github.com/pololu/lsm303-arduino)
 // Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
-void Quadrotor::L3GD20Calibration(void)
+void Quadrotor::GyroCalibration(void)
 {
-  L3GD20.read();
-  float gyro_temp = L3GD20.t * -1.0 + 40;
-  if (gyro_temp < - 180 && gyro_temp + 256 >= 40) gyro_temp = gyro_temp + 256;
-  if (gyro_temp < 15) gyro_temp = 15;
-  if (gyro_temp > 65) gyro_temp = 65;
-
-  float gyro_temp_4, gyro_temp_3, gyro_temp_2;
-  gyro_temp_4 = gyro_temp * gyro_temp * gyro_temp * gyro_temp;
-  gyro_temp_3 = gyro_temp * gyro_temp * gyro_temp;
-  gyro_temp_2 = gyro_temp * gyro_temp;
-
-  gyro.raw.x = L3GD20.g.x;
-  gyro.raw.y = L3GD20.g.y;
-  gyro.raw.z = L3GD20.g.z;
-
-  // Temperature Compensation Model for L3GD20
-  gyro.tempOffset.x = 0.00005023 * gyro_temp_4  - 0.008857 * gyro_temp_3 + 0.4812 * gyro_temp_2 - 6.678 * gyro_temp - 120.4;
-  gyro.tempOffset.y = -0.00009043 * gyro_temp_4  + 0.0134 * gyro_temp_3 - 0.6597 * gyro_temp_2 + 6.861 * gyro_temp + 47.37;
-  gyro.tempOffset.z = 0.00002922 * gyro_temp_4  - 0.004101 * gyro_temp_3 + 0.1754 * gyro_temp_2 - 4.791 * gyro_temp + 120.7;
-
-  gyro.calibrated.x = (gyro.raw.x - gyro.tempOffset.x) * 1.0 / 65.536;
-  gyro.calibrated.y = (gyro.raw.y - gyro.tempOffset.y) * 1.0 / 65.536;
-  gyro.calibrated.z = (gyro.raw.z - gyro.tempOffset.z) * 1.0 / 65.536;
-
-  if (gyro_calibration_done == 0 && gyro_calibration_counter <= 1500)
+  if (gyro_calibration_counter > 400 && gyro_calibration_counter < 1001)
   {
-    gyro_calibration_counter++;
-    if (gyro_calibration_counter > 400 && gyro_calibration_counter < 1001)
-    {
-      GyroCollection[0] += gyro.calibrated.x;
-      GyroCollection[1] += gyro.calibrated.y;
-      GyroCollection[2] += gyro.calibrated.z;
-    }
-    if (gyro_calibration_counter == 1001)
-    {
-      gyro.gyroOffset.x = GyroCollection[0] / 600;
-      gyro.gyroOffset.y = GyroCollection[1] / 600;
-      gyro.gyroOffset.z = GyroCollection[2] / 600;
-      gyro_calibration_counter = 0;
-      GyroCollection[0] = 0;
-      GyroCollection[1] = 0;
-      GyroCollection[2] = 0;
-      gyro_calibration_done = 1;
-    }
+    Quadrotor::MPU6050read();
+    GyroCollection[0] += gyro.calibrated.x;
+    GyroCollection[1] += gyro.calibrated.y;
+    GyroCollection[2] += gyro.calibrated.z;
   }
-}
-
-// Read Accelerometer Data
-// Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
-// Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
-void Quadrotor::LSM303Dread(void)
-{
-  LSM303D.read();
-  accel.raw.x = LSM303D.a.x;
-  accel.raw.y = LSM303D.a.y;
-  accel.raw.z = LSM303D.a.z;
-
-  accel.afterOffset.x = (float)accel.raw.x - Acc_Cali.accel_offset[0];
-  accel.afterOffset.y = (float)accel.raw.y - Acc_Cali.accel_offset[1];
-  accel.afterOffset.z = (float)accel.raw.z - Acc_Cali.accel_offset[2];
-
-  accel.calibrated.x = accel.afterOffset.x *  Acc_Cali.T[0][0] + accel.afterOffset.y *  Acc_Cali.T[1][0] + accel.afterOffset.z *  Acc_Cali.T[2][0];
-  accel.calibrated.y = accel.afterOffset.x *  Acc_Cali.T[0][1] + accel.afterOffset.y *  Acc_Cali.T[1][1] + accel.afterOffset.z *  Acc_Cali.T[2][1];
-  accel.calibrated.z = accel.afterOffset.x *  Acc_Cali.T[0][2] + accel.afterOffset.y *  Acc_Cali.T[1][2] + accel.afterOffset.z *  Acc_Cali.T[2][2];
+  if (gyro_calibration_counter == 1001)
+  {
+    gyro.gyroOffset.x = GyroCollection[0] / 600;
+    gyro.gyroOffset.y = GyroCollection[1] / 600;
+    gyro.gyroOffset.z = GyroCollection[2] / 600;
+    GyroCollection[0] = 0;
+    GyroCollection[1] = 0;
+    GyroCollection[2] = 0;
+    gyro_calibration_done = 1;
+  }
 }
 
 // Accelerometer Calibration
 // Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
 // Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
-void Quadrotor::LSM303DCalibration(uint8_t point)
+void Quadrotor::AccelCalibration(uint8_t point)
 {
-  LSM303D.read();
-  accel.raw.x = LSM303D.a.x;
-  accel.raw.y = LSM303D.a.y;
-  accel.raw.z = LSM303D.a.z;
-  /*Point = 0 1 2 3 4 5*/
   if (Acc_Cali.accel_timer == 100)
   {
     Acc_Cali.accel_raw[point][0] = Acc_Cali.accel_calitmpx / 100;
@@ -270,6 +200,7 @@ void Quadrotor::LSM303DCalibration(uint8_t point)
   }
   else
   {
+    Quadrotor::MPU6050read();
     Acc_Cali.accel_calitmpx += accel.raw.x;
     Acc_Cali.accel_calitmpy += accel.raw.y;
     Acc_Cali.accel_calitmpz += accel.raw.z;
@@ -280,7 +211,7 @@ void Quadrotor::LSM303DCalibration(uint8_t point)
 // Accelerometer Offset Calculation
 // Source: Andrea Vitali (DT0053 Design tip - 6-point tumble sensor calibration)
 // Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
-void Quadrotor::LSM303DOffsetRead(void)
+void Quadrotor::AccelOffsetRead(void)
 {
   uint8_t point;
   for (point = 0; point < 6; point++)
@@ -293,6 +224,15 @@ void Quadrotor::LSM303DOffsetRead(void)
   Acc_Cali.accel_offset[0] = (float)(Acc_Cali.accel_raw[0][0] + Acc_Cali.accel_raw[1][0]) / 2.0;
   Acc_Cali.accel_offset[1] = (float)(Acc_Cali.accel_raw[2][1] + Acc_Cali.accel_raw[3][1]) / 2.0;
   Acc_Cali.accel_offset[2] = (float)(Acc_Cali.accel_raw[4][2] + Acc_Cali.accel_raw[5][2]) / 2.0;
+
+  Serial.println("------------------------");
+  Serial.println("Accelerometer Offset: ");
+  Serial.println("------------------------");
+  Serial.print(Acc_Cali.accel_offset[0]);
+  Serial.print(", ");
+  Serial.print(Acc_Cali.accel_offset[1]);
+  Serial.print(", ");
+  Serial.println(Acc_Cali.accel_offset[2]);
 
   for (point = 0; point < 3; point++)
     Acc_Cali.a[0][point] = (float)Acc_Cali.accel_raw[0][point] - Acc_Cali.accel_offset[point];
@@ -312,6 +252,28 @@ void Quadrotor::LSM303DOffsetRead(void)
   Acc_Cali.T[2][0] = (Acc_Cali.g * (Acc_Cali.a[1][0] * Acc_Cali.a[2][1] - Acc_Cali.a[1][1] * Acc_Cali.a[2][0])) / (Acc_Cali.a[0][0] * Acc_Cali.a[1][1] * Acc_Cali.a[2][2] - Acc_Cali.a[0][0] * Acc_Cali.a[1][2] * Acc_Cali.a[2][1] - Acc_Cali.a[0][1] * Acc_Cali.a[1][0] * Acc_Cali.a[2][2] + Acc_Cali.a[0][1] * Acc_Cali.a[1][2] * Acc_Cali.a[2][0] + Acc_Cali.a[0][2] * Acc_Cali.a[1][0] * Acc_Cali.a[2][1] - Acc_Cali.a[0][2] * Acc_Cali.a[1][1] * Acc_Cali.a[2][0]);
   Acc_Cali.T[2][1] = -(Acc_Cali.g * (Acc_Cali.a[0][0] * Acc_Cali.a[2][1] - Acc_Cali.a[0][1] * Acc_Cali.a[2][0])) / (Acc_Cali.a[0][0] * Acc_Cali.a[1][1] * Acc_Cali.a[2][2] - Acc_Cali.a[0][0] * Acc_Cali.a[1][2] * Acc_Cali.a[2][1] - Acc_Cali.a[0][1] * Acc_Cali.a[1][0] * Acc_Cali.a[2][2] + Acc_Cali.a[0][1] * Acc_Cali.a[1][2] * Acc_Cali.a[2][0] + Acc_Cali.a[0][2] * Acc_Cali.a[1][0] * Acc_Cali.a[2][1] - Acc_Cali.a[0][2] * Acc_Cali.a[1][1] * Acc_Cali.a[2][0]);
   Acc_Cali.T[2][2] = (Acc_Cali.g * (Acc_Cali.a[0][0] * Acc_Cali.a[1][1] - Acc_Cali.a[0][1] * Acc_Cali.a[1][0])) / (Acc_Cali.a[0][0] * Acc_Cali.a[1][1] * Acc_Cali.a[2][2] - Acc_Cali.a[0][0] * Acc_Cali.a[1][2] * Acc_Cali.a[2][1] - Acc_Cali.a[0][1] * Acc_Cali.a[1][0] * Acc_Cali.a[2][2] + Acc_Cali.a[0][1] * Acc_Cali.a[1][2] * Acc_Cali.a[2][0] + Acc_Cali.a[0][2] * Acc_Cali.a[1][0] * Acc_Cali.a[2][1] - Acc_Cali.a[0][2] * Acc_Cali.a[1][1] * Acc_Cali.a[2][0]);
+
+
+  Serial.println("------------------------");
+  Serial.println("Accelerometer Calibration: ");
+  Serial.println("------------------------");
+  Serial.print(Acc_Cali.T[0][0]);
+  Serial.print(", ");
+  Serial.print(Acc_Cali.T[0][1]);
+  Serial.print(", ");
+  Serial.println(Acc_Cali.T[0][2]);
+  Serial.print(Acc_Cali.T[1][0]);
+  Serial.print(", ");
+  Serial.print(Acc_Cali.T[1][1]);
+  Serial.print(", ");
+  Serial.println(Acc_Cali.T[1][2]);
+  Serial.print(Acc_Cali.T[2][0]);
+  Serial.print(", ");
+  Serial.print(Acc_Cali.T[2][1]);
+  Serial.print(", ");
+  Serial.println(Acc_Cali.T[2][2]);
+  Serial.println("------------------------");
+
 }
 
 // Second Order Low Pass Filter for Gyroscope data
@@ -320,7 +282,6 @@ void Quadrotor::FilterInit(void)
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &gyroFilterParameterX);
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &gyroFilterParameterY);
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &gyroFilterParameterZ);
-
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &accelFilterParameterX);
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &accelFilterParameterY);
   Quadrotor::SecondOrderLowPassFilter(400.0, 30.0, &accelFilterParameterZ);
@@ -350,8 +311,7 @@ void Quadrotor::Estimation(int8_t method)
 // Source: S. Tellex, A. Brown, and S. Lupashin. Estimation for Quadrotors. June 11, 2018.
 void Quadrotor::NonlinearComplementaryFilter(void)
 {
-  Quadrotor::L3GD20read();
-  Quadrotor::LSM303Dread();
+  Quadrotor::MPU6050read();
 
   accelAngle.x = -atan(accel.calibrated.x / accel.calibrated.z); // Roll [rad]
   accelAngle.y = atan(accel.calibrated.y / accel.calibrated.z); // Pitch [rad]
@@ -401,31 +361,39 @@ void Quadrotor::NonlinearComplementaryFilter(void)
 // Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::AHRS(void)
 {
-  Quadrotor::L3GD20read();
-  Quadrotor::LSM303Dread();
+  Quadrotor::MPU6050read();
 
   gyro.filtered.x = Quadrotor::SecondOrderLowPassFilterApply(30.0, gyro.calibrated.x, &gyroFilterParameterX);
-  gyro.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, gyro.calibrated.y, &gyroFilterParameterY);
-  gyro.filtered.z = Quadrotor::SecondOrderLowPassFilterApply(30.0, gyro.calibrated.z, &gyroFilterParameterZ);
+  gyro.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, -gyro.calibrated.y, &gyroFilterParameterY);
+  gyro.filtered.z = Quadrotor::SecondOrderLowPassFilterApply(30.0, -gyro.calibrated.z, &gyroFilterParameterZ);
 
   accel.filtered.x = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.x, &accelFilterParameterX);
   accel.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.y, &accelFilterParameterY);
   accel.filtered.z = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.z, &accelFilterParameterZ);
+
+  float p_deg = gyro.filtered.x * 0.07;
+  float q_deg = gyro.filtered.y * 0.07;
+  float r_deg = gyro.filtered.z * 0.07;
+
+
+  X.p = p_deg * (PI/180);
+  X.q = q_deg * (PI/180);
+  X.r = r_deg * (PI/180);
 
   Quadrotor::MadgwickMARG();
 }
 
 void Quadrotor::MadgwickMARG()
 {
-  float quat[4], ypr[3], gx, gy, gz, AHRS_val[6];
-  AHRS_val[0] = accel.filtered.y / 8192.0;
-  AHRS_val[1] = accel.filtered.x / 8192.0;
-  AHRS_val[2] = accel.filtered.z / 8192.0;
-  AHRS_val[3] = gyro.filtered.x * -1.0;
-  AHRS_val[4] = gyro.filtered.y;
-  AHRS_val[5] = gyro.filtered.z * -1.0;
+  float quat[4], ypr[3], gx, gy, gz, AHRS_val[9];
+  AHRS_val[0] = accel.filtered.x * 0.122/1000;
+  AHRS_val[1] = accel.filtered.y * 0.122/1000;
+  AHRS_val[2] = accel.filtered.z * 0.122/1000;
+  AHRS_val[3] = X.p;
+  AHRS_val[4] = -X.q;
+  AHRS_val[5] = -X.r;
 
-  Quadrotor::MahonyAHRS(AHRS_val[3] * PI / 180, AHRS_val[4] * PI / 180, AHRS_val[5] * PI / 180, AHRS_val[0], AHRS_val[1], AHRS_val[2]);
+  Quadrotor::MahonyAHRS(AHRS_val[3], AHRS_val[4], AHRS_val[5], AHRS_val[0], AHRS_val[1], AHRS_val[2]);
 
   quat[0] = q.w;
   quat[1] = q.x;
@@ -438,32 +406,24 @@ void Quadrotor::MadgwickMARG()
 
   ypr[0] = atan2(2 * quat[1] * quat[2] - 2 * quat[0] * quat[3], 2 * quat[0] * quat[0] + 2 * quat[1] * quat[1] - 1);
   ypr[1] = atan(gx / sqrt(gy * gy + gz * gz));
-  ypr[2] = atan(gy / sqrt(gx * gx + gz * gz));
+  ypr[2] = atan(gy / sqrt(gx * gx + gz * gz));;
 
-  float p_deg = gyro.filtered.x;
-  float q_deg  = -gyro.filtered.y;
-  float r_deg  = -gyro.filtered.z;
-  X.p = p_deg * PI / 180.0;
-  X.q = q_deg * PI / 180.0;
-  X.r = r_deg * PI / 180.0;
-
-  X.phi = -ypr[2];
+  X.phi = ypr[2];
   X.theta = ypr[1];
-  X.psi = -ypr[0];
-
-  trig.phi_sin = sin(X.phi);
-  trig.theta_sin = sin(X.theta);
-  trig.psi_sin = sin(X.psi);
-  trig.phi_cos = cos(X.phi);
-  trig.theta_cos = cos(X.theta);
-  trig.psi_cos = cos(X.psi);
+  X.psi = ypr[0];
 }
 
-void Quadrotor::MahonyAHRS(float gx, float gy, float gz, float ax, float ay, float az) {
+void Quadrotor::MahonyAHRS(float gx, float gy, float gz, float ax, float ay, float az)
+{
   float recipNorm;
   float halfvx, halfvy, halfvz;
   float halfex, halfey, halfez;
   float qa, qb, qc;
+  float q0, q1, q2, q3;
+  q0 = q.w;
+  q1 = q.x;
+  q2 = q.y;
+  q3 = q.z;
 
   // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
   if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
@@ -475,9 +435,9 @@ void Quadrotor::MahonyAHRS(float gx, float gy, float gz, float ax, float ay, flo
     az *= recipNorm;
 
     // Estimated direction of gravity and vector perpendicular to magnetic flux
-    halfvx = q.x * q.z - q.w * q.y;
-    halfvy = q.w * q.x + q.y * q.z;
-    halfvz = q.w * q.w - 0.5f + q.z * q.z;
+    halfvx = q1 * q3 - q0 * q2;
+    halfvy = q0 * q1 + q2 * q3;
+    halfvz = q0 * q0 - 0.5f + q3 * q3;
 
     // Error is sum of cross product between estimated and measured direction of gravity
     halfex = (ay * halfvz - az * halfvy);
@@ -509,20 +469,25 @@ void Quadrotor::MahonyAHRS(float gx, float gy, float gz, float ax, float ay, flo
   gx *= (0.5f * (1.0f / FREQ));   // pre-multiply common factors
   gy *= (0.5f * (1.0f / FREQ));
   gz *= (0.5f * (1.0f / FREQ));
-  qa = q.w;
-  qb = q.x;
-  qc = q.y;
-  q.w += (-qb * gx - qc * gy - q.z * gz);
-  q.x += (qa * gx + qc * gz - q.z * gy);
-  q.y += (qa * gy - qb * gz + q.z * gx);
-  q.z += (qa * gz + qb * gy - qc * gx);
+  qa = q0;
+  qb = q1;
+  qc = q2;
+  q0 += (-qb * gx - qc * gy - q3 * gz);
+  q1 += (qa * gx + qc * gz - q3 * gy);
+  q2 += (qa * gy - qb * gz + q3 * gx);
+  q3 += (qa * gz + qb * gy - qc * gx);
 
   // Normalise quaternion
-  recipNorm = invSqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
-  q.w *= recipNorm;
-  q.x *= recipNorm;
-  q.y *= recipNorm;
-  q.z *= recipNorm;
+  recipNorm = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+  q0 *= recipNorm;
+  q1 *= recipNorm;
+  q2 *= recipNorm;
+  q3 *= recipNorm;
+
+  q.w = q0;
+  q.x = q1;
+  q.y = q2;
+  q.z = q3;
 }
 
 // Quadrotor States of Operation
@@ -641,6 +606,7 @@ void Quadrotor::AttitudeControl(void)
     {
       yaw_target = X.psi;
     }
+
   }
   Quadrotor::AngularRateControl();
 }
@@ -758,19 +724,43 @@ void Quadrotor::MotorRun(void)
 // Source: (https://github.com/mattzzw/Arduino-mpu6050)
 void Quadrotor::XbeeZigbeeSend(void)
 {
-  if (Serial1.available())
+  Xbee_couter2++;
+  if (Xbee_couter2 >= 20)
   {
-    char command_received;
-    command_received = Serial1.read();
-    if (command_received == '.')
-    {
-      Serial1.print(U1, 2);
-      Serial1.print(", ");
-      Serial1.print(PWM1, 2);
-      Serial1.print(", ");
-      Serial1.println(omega1, 2);
-    }
+    Xbee_couter2 = 0;
+    Serial1.print(U1, 2);
+    Serial1.print(", ");
+    Serial1.print(U2, 2);
+    Serial1.print(", ");
+    Serial1.print(U3, 2);
+    Serial1.print(", ");
+    Serial1.print(U4, 2);
+    Serial1.print(", ");
+    Serial1.print(Xdes.phi, 2);
+    Serial1.print(", ");
+    Serial1.print(X.phi, 2);
+    Serial1.print(", ");
+    Serial1.print(Xdes.theta, 2);
+    Serial1.print(", ");
+    Serial1.print(X.theta, 2);
+    Serial1.print(", ");
+    Serial1.print(RCYawRate, 2);
+    Serial1.print(", ");
+    Serial1.print(X.r, 2);
   }
+  // if (Serial1.available())
+  // {
+  //   char command_received;
+  //   command_received = Serial1.read();
+  //   if (command_received == '.')
+  //   {
+  //     Serial1.print(U3, 2);
+  //     Serial1.print(", ");
+  //     Serial1.print(Xdes.theta, 2);
+  //     Serial1.print(", ");
+  //     Serial1.println(X.theta, 2);
+  //   }
+  // }
 }
 
 // XbeeZigbee Receive Data Wirelessly

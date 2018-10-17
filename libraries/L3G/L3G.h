@@ -49,6 +49,14 @@
 #define L3G_INT1_THS_ZL   0x37
 #define L3G_INT1_DURATION 0x38
 
+#define MPUREG_PWR_MGMT_1       0x6B
+#define MPUREG_SMPLRT_DIV       0x19
+#define MPUREG_CONFIG           0x1A
+#define MPUREG_GYRO_CONFIG      0x1B
+#define MPUREG_ACCEL_CONFIG     0x1C
+#define MPUREG_INT_PIN_CFG      0x37
+#define MPUREG_WHOAMI           0x75
+
 class L3G
 {
   public:

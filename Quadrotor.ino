@@ -15,13 +15,13 @@ void setup()
   Quad.FilterInit();
   delay(200);
  // Check the position of the reciver before starting
- while (Quad.channel.CH3 < 990 || Quad.channel.CH3 > 1020 || Quad.channel.CH4 < 1400)
- {
-   digitalWrite(LEDRed, LOW);
-   delay(200);
-   digitalWrite(LEDRed, LOW);
-   delay(200);
- }
+  while (Quad.channel.CH3 < 990 || Quad.channel.CH3 > 1020 || Quad.channel.CH4 < 1400)
+  {
+    digitalWrite(LEDRed, LOW);
+    delay(200);
+    digitalWrite(LEDRed, LOW);
+    delay(200);
+  }
    digitalWrite(LEDRed, LOW);
 
    Serial.println("Now Ready!");
@@ -37,7 +37,7 @@ void loop()
   Quad.AttitudeControl();
   Quad.AltitudeControl();
   Quad.GenerateMotorCommands();
-  //Quad.XbeeZigbeeSend();
+  Quad.XbeeZigbeeSend();
   //Quad.XbeeZigbeeReceive();
 
   while (micros() - Quad.loop_timer < dtMicroseconds);
