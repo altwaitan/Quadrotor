@@ -68,7 +68,7 @@
 #define kdPQRy 0.004
 #define kiPQRy 0.8
 #define kpPQRz 0.1
-#define kdPQRz 0.001 
+#define kdPQRz 0.001
 #define kiPQRz 0.2
 // Outer-loop PID parameters
 #define kpx 10
@@ -134,9 +134,6 @@ public:
   float GyroCollection[3] = {0, 0, 0};
   float integralFBx = 0.0f,  integralFBy = 0.0f, integralFBz = 0.0f;
   Quaternion quat;
-  int16_t NowUpdate = 0;
-  int16_t LastUpdate = 0;
-  float eInt[3] = {0.0f, 0.0f, 0.0f};
   float temp;
 
 
@@ -153,13 +150,11 @@ public:
   // Control variables
   float U1, U2, U3, U4; // Inner loop
   uint8_t outerCounter = 0;
-  uint8_t YawLock = 0;
 
   // Receiver variables
   _CH channel;
   bool lastChannel1, lastChannel2, lastChannel3, lastChannel4;
   unsigned long receiverChannelTimer1, receiverChannelTimer2, receiverChannelTimer3, receiverChannelTimer4;
-  unsigned long current_time;
   float RCYawRate;
 
   // Motor variables
@@ -182,7 +177,7 @@ public:
   // Methods
   void MotorInit(void);
   void SensorInit(void);
-  void MPU6050read(void);
+  void IMUread(void);
   void GyroCalibration(void);
   void AccelCalibration(uint8_t point);
   void AccelOffsetRead(void);
@@ -190,8 +185,8 @@ public:
   void Estimation(int8_t method);
   void NonlinearComplementaryFilter(void);
   void AHRS(void);
-  void MadgwickMARG(void);
-  void MahonyAHRS(float gx, float gy, float gz, float ax, float ay, float az);
+  void MahonyAHRS(void);
+  void MahonyAHRSUpdate(float gx, float gy, float gz, float ax, float ay, float az);
   void ArmingState(void);
   void BatteryVoltageCheck(void);
   void Receiver(void);

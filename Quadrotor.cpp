@@ -115,7 +115,7 @@ void Quadrotor::SensorInit(void)
 
 // Read Gyroscope Data
 // Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
-void Quadrotor::MPU6050read(void)
+void Quadrotor::IMUread(void)
 {
   imu.read();
   accel.raw.x = imu.a.x;
@@ -159,7 +159,7 @@ void Quadrotor::GyroCalibration(void)
 {
   if (gyro_calibration_counter > 400 && gyro_calibration_counter < 1001)
   {
-    Quadrotor::MPU6050read();
+    Quadrotor::IMUread();
     GyroCollection[0] += gyro.calibrated.x;
     GyroCollection[1] += gyro.calibrated.y;
     GyroCollection[2] += gyro.calibrated.z;
@@ -200,7 +200,7 @@ void Quadrotor::AccelCalibration(uint8_t point)
   }
   else
   {
-    Quadrotor::MPU6050read();
+    Quadrotor::IMUread();
     Acc_Cali.accel_calitmpx += accel.raw.x;
     Acc_Cali.accel_calitmpy += accel.raw.y;
     Acc_Cali.accel_calitmpz += accel.raw.z;
@@ -311,7 +311,7 @@ void Quadrotor::Estimation(int8_t method)
 // Source: S. Tellex, A. Brown, and S. Lupashin. Estimation for Quadrotors. June 11, 2018.
 void Quadrotor::NonlinearComplementaryFilter(void)
 {
-  Quadrotor::MPU6050read();
+  Quadrotor::IMUread();
 
   accelAngle.x = -atan(accel.calibrated.x / accel.calibrated.z); // Roll [rad]
   accelAngle.y = atan(accel.calibrated.y / accel.calibrated.z); // Pitch [rad]
@@ -361,7 +361,7 @@ void Quadrotor::NonlinearComplementaryFilter(void)
 // Source: Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::AHRS(void)
 {
-  Quadrotor::MPU6050read();
+  Quadrotor::IMUread();
 
   gyro.filtered.x = Quadrotor::SecondOrderLowPassFilterApply(30.0, gyro.calibrated.x, &gyroFilterParameterX);
   gyro.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, -gyro.calibrated.y, &gyroFilterParameterY);
@@ -380,10 +380,10 @@ void Quadrotor::AHRS(void)
   X.q = q_deg * (PI/180);
   X.r = r_deg * (PI/180);
 
-  Quadrotor::MadgwickMARG();
+  Quadrotor::MahonyAHRS();
 }
 
-void Quadrotor::MadgwickMARG()
+void Quadrotor::MahonyAHRS()
 {
   float quat[4], ypr[3], gx, gy, gz, AHRS_val[9];
   AHRS_val[0] = accel.filtered.x * 0.122/1000;
@@ -393,7 +393,7 @@ void Quadrotor::MadgwickMARG()
   AHRS_val[4] = -X.q;
   AHRS_val[5] = -X.r;
 
-  Quadrotor::MahonyAHRS(AHRS_val[3], AHRS_val[4], AHRS_val[5], AHRS_val[0], AHRS_val[1], AHRS_val[2]);
+  Quadrotor::MahonyAHRSUpdate(AHRS_val[3], AHRS_val[4], AHRS_val[5], AHRS_val[0], AHRS_val[1], AHRS_val[2]);
 
   quat[0] = q.w;
   quat[1] = q.x;
@@ -413,7 +413,7 @@ void Quadrotor::MadgwickMARG()
   X.psi = ypr[0];
 }
 
-void Quadrotor::MahonyAHRS(float gx, float gy, float gz, float ax, float ay, float az)
+void Quadrotor::MahonyAHRSUpdate(float gx, float gy, float gz, float ax, float ay, float az)
 {
   float recipNorm;
   float halfvx, halfvy, halfvz;
