@@ -71,13 +71,13 @@
 #define kdPQRz 0.001
 #define kiPQRz 0.2
 // Outer-loop PID parameters
-#define kpx 10
+#define kpx 9
 #define kdx 0
 #define kix 0
-#define kpy 10
+#define kpy 9
 #define kdy 0
 #define kiy 0
-#define kpz 10
+#define kpz 9
 #define kdz 0
 #define kiz 0
 
@@ -109,7 +109,7 @@ public:
     short CH1, CH2, CH3, CH4;
   };
   struct _ERROR {
-    float p, q, r, p_prev, q_prev, r_prev, p_integral, q_integral,  r_integral;
+    float p, q, r, p_prev, p_prev2, p_prev3, q_prev, q_prev2, q_prev3, r_prev, r_prev2, r_prev3, p_integral, q_integral,  r_integral;
     float phi, theta, psi, phi_prev, theta_prev, psi_prev, phi_integral, theta_integral,  psi_integral;
   };
   struct _Acc_Cali {
@@ -117,6 +117,12 @@ public:
     int32_t accel_calitmpx, accel_calitmpy, accel_calitmpz;
     float accel_offset[3], a[3][3], T[3][3];
     float g = 8196.72; // for +-4g range
+  };
+  struct _CONTROLS {
+    float current, prev1, prev2, prev3; // U[n], U[n-1], U[n-2], U[n-3]
+  };
+  struct _W {
+    float input, input_prev1, output, output_prev1; // W = (az + a)/(z - b) first-order prefilter W = c/(s + c)
   };
 
   // Sensor variables
@@ -146,10 +152,16 @@ public:
   uint8_t QuadrotorState = START_MODE;
   float voltage;
   unsigned long loop_timer;
+  uint8_t blink = 0;
+  uint8_t blinkCounter = 0;
 
   // Control variables
-  float U1, U2, U3, U4; // Inner loop
+  _CONTROLS U1, U2, U3, U4; // Inner loop
+  _W Wp, Wq, Wr; // Prefilter
   uint8_t outerCounter = 0;
+  int8_t control_method = 0;
+  int control_method_counter = 0;
+
 
   // Receiver variables
   _CH channel;
@@ -173,6 +185,7 @@ public:
   boolean newData = false;
   uint8_t Xbee_couter = 0;
   uint8_t Xbee_couter2 = 0;
+  uint16_t DataTimer = 0;
 
   // Methods
   void MotorInit(void);
@@ -190,6 +203,7 @@ public:
   void ArmingState(void);
   void BatteryVoltageCheck(void);
   void Receiver(void);
+  void Control(int8_t method);
   void AttitudeControl(void);
   void AngularRateControl(void);
   void AltitudeControl(void);

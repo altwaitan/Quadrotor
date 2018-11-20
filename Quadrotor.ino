@@ -18,14 +18,17 @@ void setup()
   while (Quad.channel.CH3 < 990 || Quad.channel.CH3 > 1020 || Quad.channel.CH4 < 1400)
   {
     digitalWrite(LEDRed, LOW);
+    digitalWrite(LEDGreen, HIGH);
     delay(200);
-    digitalWrite(LEDRed, LOW);
+    digitalWrite(LEDRed, HIGH);
+    digitalWrite(LEDGreen, LOW);
     delay(200);
   }
-   digitalWrite(LEDRed, LOW);
+  digitalWrite(LEDRed, LOW);
+  digitalWrite(LEDGreen, HIGH);
 
-   Serial.println("Now Ready!");
-   Quad.loop_timer = micros();
+  Serial.println("Now Ready!");
+  Quad.loop_timer = micros();
 }
 
 
@@ -34,11 +37,14 @@ void loop()
   Quad.ArmingState();
   Quad.BatteryVoltageCheck();
   Quad.Estimation(1);
+  Quad.Control(2); 
   Quad.AttitudeControl();
   Quad.AltitudeControl();
   Quad.GenerateMotorCommands();
   Quad.XbeeZigbeeSend();
   //Quad.XbeeZigbeeReceive();
+
+  Serial.println(Quad.Wr.output);
 
   while (micros() - Quad.loop_timer < dtMicroseconds);
   // Reset the zero timer
