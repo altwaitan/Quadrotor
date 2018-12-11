@@ -77,7 +77,7 @@
 #define kpy 9
 #define kdy 0
 #define kiy 0
-#define kpz 9
+#define kpz 4
 #define kdz 0
 #define kiz 0
 
@@ -86,6 +86,7 @@ class Quadrotor
 public:
   struct _STATE {
     float x, y, z, phi, theta, psi, xdot, ydot, zdot, p, q, r;
+    float phi_prev1, phi_prev2, phi_prev3, theta_prev1, theta_prev2, theta_prev3;
   };
   struct _XYZ {
     float x, y, z;
@@ -106,11 +107,13 @@ public:
     float phi_sin, theta_sin, psi_sin, phi_cos, theta_cos, psi_cos;
   };
   struct _CH {
-    short CH1, CH2, CH3, CH4;
+    short CH1, CH2, CH3, CH4, CH5;
   };
   struct _ERROR {
-    float p, q, r, p_prev, p_prev2, p_prev3, q_prev, q_prev2, q_prev3, r_prev, r_prev2, r_prev3, p_integral, q_integral,  r_integral;
-    float phi, theta, psi, phi_prev, theta_prev, psi_prev, phi_integral, theta_integral,  psi_integral;
+    float p, q, r, p_prev1, p_prev2, p_prev3, q_prev1, q_prev2, q_prev3, r_prev1, r_prev2, r_prev3, p_integral, q_integral,  r_integral;
+    float phi, theta, psi, phi_prev1, theta_prev1, psi_prev1, phi_integral, theta_integral,  psi_integral;
+    float xdot, xdot_prev1, xdot_prev2, xdot_prev3, ydot, ydot_prev1, ydot_prev2, ydot_prev3, zdot, zdot_prev1, zdot_prev2, zdot_prev3;
+    float x, y, z;
   };
   struct _Acc_Cali {
     int16_t accel_raw[6][3], accel_timer = 0;
@@ -157,16 +160,20 @@ public:
 
   // Control variables
   _CONTROLS U1, U2, U3, U4; // Inner loop
-  _W Wp, Wq, Wr; // Prefilter
+  _W Wp, Wq, Wr, Wxdot, Wydot, Wzdot; // Prefilter
   uint8_t outerCounter = 0;
+  uint8_t altitudeCounter = 0;
+  int altitudeOuterCounter = 0;
+  int velocityCounter = 0;
+  int positionCounter = 0;
   int8_t control_method = 0;
   int control_method_counter = 0;
 
 
   // Receiver variables
   _CH channel;
-  bool lastChannel1, lastChannel2, lastChannel3, lastChannel4;
-  unsigned long receiverChannelTimer1, receiverChannelTimer2, receiverChannelTimer3, receiverChannelTimer4;
+  bool lastChannel1, lastChannel2, lastChannel3, lastChannel4, lastChannel5;
+  unsigned long receiverChannelTimer1, receiverChannelTimer2, receiverChannelTimer3, receiverChannelTimer4, receiverChannelTimer5;
   float RCYawRate;
 
   // Motor variables
@@ -187,6 +194,13 @@ public:
   uint8_t Xbee_couter2 = 0;
   uint16_t DataTimer = 0;
 
+  // HTC Vive
+  uint8_t Xbee_data[500];
+  int16_t Xbee_length;
+  short Xbee_command;
+  float moving_average[13][5], sum_average[13];
+
+
   // Methods
   void MotorInit(void);
   void SensorInit(void);
@@ -204,9 +218,12 @@ public:
   void BatteryVoltageCheck(void);
   void Receiver(void);
   void Control(int8_t method);
+  void ThrottleControl(void);
   void AttitudeControl(void);
   void AngularRateControl(void);
   void AltitudeControl(void);
+  void PositionControl(void);
+  void VelocityControl(void);
   void GenerateMotorCommands(void);
   void MotorRun(void);
   void XbeeZigbeeSend(void);

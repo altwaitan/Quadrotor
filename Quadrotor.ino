@@ -1,8 +1,9 @@
 // Author: Abdullah Altawaitan
 // Description: Teensy 3.2 code
-#include "Quadrotor.h"
+#include "BaseStation.h"
 
 Quadrotor Quad;
+BaseStation Vive;
 
 void setup()
 {
@@ -37,14 +38,13 @@ void loop()
   Quad.ArmingState();
   Quad.BatteryVoltageCheck();
   Quad.Estimation(1);
-  Quad.Control(2); 
+  Vive.HTCVive(&Quad);
+  Quad.Control(2);
   Quad.AttitudeControl();
-  Quad.AltitudeControl();
+  Quad.ThrottleControl();
   Quad.GenerateMotorCommands();
   Quad.XbeeZigbeeSend();
   //Quad.XbeeZigbeeReceive();
-
-  Serial.println(Quad.Wr.output);
 
   while (micros() - Quad.loop_timer < dtMicroseconds);
   // Reset the zero timer
@@ -64,10 +64,12 @@ void Teensy()
   pinMode(CHANNEL2, INPUT);
   pinMode(CHANNEL3, INPUT);
   pinMode(CHANNEL4, INPUT);
+  pinMode(CHANNEL5, INPUT);
   attachInterrupt(CHANNEL1, Receiver, CHANGE);
   attachInterrupt(CHANNEL2, Receiver, CHANGE);
   attachInterrupt(CHANNEL3, Receiver, CHANGE);
   attachInterrupt(CHANNEL4, Receiver, CHANGE);
+  attachInterrupt(CHANNEL5, Receiver, CHANGE);
   delay(50);
 }
 
@@ -116,6 +118,30 @@ void Receiver()
         Quad.lastChannel4 = 0;
         Quad.channel.CH4 = micros() - Quad.receiverChannelTimer4;
       }
+
+      if (Quad.lastChannel5 == 0 && digitalReadFast(CHANNEL5) == HIGH)
+       {
+         Quad.lastChannel5 = 1;
+         Quad.receiverChannelTimer5 = micros();
+       }
+       if (Quad.lastChannel5 == 1 && digitalReadFast(CHANNEL5) == LOW)
+       {
+         Quad.lastChannel5 = 0;
+         Quad.channel.CH5 = micros() - Quad.receiverChannelTimer5;
+       }
+}
+
+void serialEvent1()
+{
+  if (Quad.Xbee_couter == 2)
+  {
+    Vive.HTCVive(&Quad);
+  }
+  Quad.Xbee_couter++;
+  if (Quad.Xbee_couter >= 4)
+  {
+    Quad.Xbee_couter = 0;
+  }
 }
 
 // void serialEvent1()
