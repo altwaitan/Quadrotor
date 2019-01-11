@@ -410,7 +410,11 @@ void Quadrotor::MahonyAHRS()
 
   X.phi = ypr[2];
   X.theta = ypr[1];
-  X.psi = ypr[0];
+  // When the base stations are off
+  if (channel.CH5 < 1900)
+  {
+    X.psi = ypr[0];
+  }
 }
 
 void Quadrotor::MahonyAHRSUpdate(float gx, float gy, float gz, float ax, float ay, float az)
@@ -497,7 +501,7 @@ void Quadrotor::ArmingState(void)
   {
     QuadrotorState = TRANS_MODE;
   }
-  if (QuadrotorState == TRANS_MODE && channel.CH4 > 1400 && channel.CH4 < 1800)
+  if (QuadrotorState == TRANS_MODE && channel.CH3 < 1020 && channel.CH4 > 1400 && channel.CH4 < 1800)
   {
     QuadrotorState = ARMING_MODE;
     // Reset variables
@@ -512,7 +516,7 @@ void Quadrotor::ArmingState(void)
   {
     QuadrotorState = TEMP_MODE;
   }
-  if (QuadrotorState == TEMP_MODE && channel.CH4 > 1400 && channel.CH4 < 1800)
+  if (QuadrotorState == TEMP_MODE && channel.CH3 < 1020 && channel.CH4 > 1400 && channel.CH4 < 1800)
   {
     QuadrotorState = START_MODE;
   }
@@ -668,10 +672,46 @@ void Quadrotor::AttitudeControl(void)
       Xdes.q = kpy * error.theta;
       Xdes.q = Quadrotor::CONSTRAIN(Xdes.q, -4.4, 4.4);
 
-      error.psi = Xdes.psi - X.psi;
-      (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
-      Xdes.r = kpz * error.psi;
-      Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -0.7, 0.7);
+      if (channel.CH5 > 1900)
+      {
+        Xdes.psi = RCYawRate;
+        error.psi = Xdes.psi - X.psi;
+        (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
+        Xdes.r = kpz * error.psi;
+        Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -0.7, 0.7);
+      }
+      else
+      {
+        error.psi = Xdes.psi - X.psi;
+        (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
+        Xdes.r = kpz * error.psi;
+        Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -0.7, 0.7);
+
+        if (control_method == 1) // Classical PID
+        {
+          if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
+          {
+            Xdes.r = RCYawRate;
+            Xdes.psi = X.psi;
+          }
+          if (channel.CH3 < 1080)
+          {
+            Xdes.psi = X.psi;
+          }
+        }
+        else if (control_method == 2) // Pole-Placement
+        {
+          if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
+          {
+            Xdes.r = RCYawRate;
+            Xdes.psi = X.psi;
+          }
+          if (channel.CH3 < 1080)
+          {
+            Xdes.psi = X.psi;
+          }
+        }
+      }
 
       // Prefilter
       Wp.input = Xdes.p;
@@ -683,36 +723,13 @@ void Quadrotor::AttitudeControl(void)
       Wq.output = (0.81 * Wq.output_prev1) + (0.09501 * Wq.input) + (0.09501 * Wq.input_prev1);
       Wq.output = Quadrotor::CONSTRAIN(Wq.output, -4.4, 4.4);
 
-      if (control_method == 1) // Classical PID
-      {
-        if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
-        {
-          Xdes.r = RCYawRate;
-          Xdes.psi = X.psi;
-        }
-        if (channel.CH3 < 1080)
-        {
-          Xdes.psi = X.psi;
-        }
-      }
-      else if (control_method == 2) // Pole-Placement
-      {
-        if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
-        {
-          Xdes.r = RCYawRate;
-          Xdes.psi = X.psi;
-        }
-        if (channel.CH3 < 1080)
-        {
-          Xdes.psi = X.psi;
-        }
-      }
+      // Prefilter
+      Wr.input = Xdes.r;
+      Wr.output = (0.8768 * Wr.output_prev1) + (0.06158 * Wr.input) + (0.06158 * Wr.input_prev1);
+      Wr.output = Quadrotor::CONSTRAIN(Wr.output, -0.7, 0.7);
     }
 
-    // Prefilter
-    Wr.input = Xdes.r;
-    Wr.output = (0.8768 * Wr.output_prev1) + (0.06158 * Wr.input) + (0.06158 * Wr.input_prev1);
-    Wr.output = Quadrotor::CONSTRAIN(Wr.output, -0.7, 0.7);
+
 
     Wp.output_prev1 = Wp.output;
     Wp.input_prev1 = Wp.input;
@@ -839,97 +856,108 @@ void Quadrotor::ThrottleControl(void)
 // Source: M. Faessler, D. Falanga, and D. Scaramuzza, "Thrust Mixing, Saturation, and Body-Rate Control for Accurate Aggressive Quadrotor Flight," IEEE Robot. Autom. Lett. (RA-L), vol. 2, no. 2, pp. 476–482, Apr. 2017.
 void Quadrotor::AltitudeControl(void)
 {
-  if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+  // Base Station is ON
+  if (channel.CH5 > 1900)
   {
-    U1.current = 0;
-  }
-  else
-  {
-    U1.current = 0;
-  }
+    altitudeOuterCounter++;
+    if (altitudeOuterCounter >= 4)
+    {
+      altitudeOuterCounter = 0;
+      if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+      {
+        Xdes.z = 0.6;
+        error.z = Xdes.z - X.z;
+        Xdes.zdot = 1.5 * error.z;
+        Xdes.zdot = Quadrotor::CONSTRAIN(Xdes.zdot, -4, 4);
+      }
+      else
+      {
+        Xdes.zdot = 0;
+      }
+    }
 
-  U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 7);
-  U1.prev3 = U1.prev2;
-  U1.prev2 = U1.prev1;
-  U1.prev1 = U1.current;
-  error.zdot_prev3 = error.zdot_prev2;
-  error.zdot_prev2 = error.zdot_prev1;
-  error.zdot_prev1 = error.zdot;
+    altitudeCounter++;
+    if (altitudeCounter >= 4)
+    {
+      altitudeCounter = 0;
+      if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+      {
+        error.zdot = Xdes.zdot - X.zdot;
+        error.zdot_integral += error.zdot;
+        error.zdot_integral = Quadrotor::CONSTRAIN(error.zdot_integral, -70, 70);
+        U1.current = (6.5 * error.zdot) + error.zdot_integral * 12.0 * dtOuter + (0.6/dtOuter)*(error.zdot - error.zdot_prev1);
+        U1.current = Quadrotor::CONSTRAIN(U1.current, -4, 4);
+        U1.current = U1.current + 7.0;
+        U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
+        error.zdot_prev1 = error.zdot;
+      }
+      else
+      {
+        U1.current = 0;
+      }
+    }
+  }
+  else // Base Station is OFF
+  {
+    Quadrotor::ThrottleControl();
+  }
 }
 
 void Quadrotor::PositionControl(void)
 {
-  if (channel.CH5 > 1900 && channel.CH3 < 2000)
+  // Base Station is ON
+  if (channel.CH5 > 1900)
   {
     positionCounter++;
-    if (positionCounter >= 160)
+    if (positionCounter >= 4)
     {
       positionCounter = 0;
-      Wxdot.output = 0;
-      Wydot.output = 0;
-      error.x = 0;
-      error.y = 0;
-
       if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
       {
-        error.x = Xdes.x - X.x;
-        Xdes.xdot = 2 * error.x;
-        Xdes.xdot = Quadrotor::CONSTRAIN(Xdes.xdot, -3, 3);
+        // Z-axis position
+        Xdes.z = 0.6;
+        error.z = Xdes.z - X.z;
+        Xdes.zdot = 1.5 * error.z;
+        Xdes.zdot = Quadrotor::CONSTRAIN(Xdes.zdot, -4, 4);
 
-        error.y = Xdes.y - X.y;
-        Xdes.ydot = 2 * error.y;
-        Xdes.ydot = Quadrotor::CONSTRAIN(Xdes.ydot, -3, 3);
-
-        // Prefilter
-        Wxdot.input = Xdes.xdot;
-        Wxdot.output = (0.8391 * Wxdot.output_prev1) + (0.08045 * Wxdot.input) + (0.08045 * Wxdot.input_prev1);
-        Wxdot.output = Quadrotor::CONSTRAIN(Wxdot.output, -3, 3);
-
-        // Prefilter
-        Wydot.input = Xdes.ydot;
-        Wydot.output = (0.8391 * Wydot.output_prev1) + (0.08045 * Wydot.input) + (0.08045 * Wydot.input_prev1);
-        Wydot.output = Quadrotor::CONSTRAIN(Wydot.output, -3, 3);
+        Quadrotor::VelocityControl();
       }
-
-      Wxdot.output_prev1 = Wxdot.output;
-      Wxdot.input_prev1 = Wxdot.input;
-      Wydot.output_prev1 = Wydot.output;
-      Wydot.input_prev1 = Wydot.input;
+      else
+      {
+        Xdes.zdot = 0;
+        U1.current = 0;
+      }
     }
-    Quadrotor::VelocityControl();
+  }
+  else // Base Station is OFF
+  {
+    Quadrotor::ThrottleControl();
   }
 }
 
 void Quadrotor::VelocityControl(void)
 {
-  if (channel.CH5 > 1900 && channel.CH3 < 2000)
+  if (channel.CH5 > 1900)
   {
-    velocityCounter++;
-    if (velocityCounter >= 40)
-    {
-      velocityCounter = 0;
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
-      {
-        error.xdot = Wxdot.output - X.xdot;
-        Xdes.phi = (1.0 * Xdes.phi_prev2)  + (0.09375 * error.xdot) + (0.0375 * error.xdot_prev1) + (0.00375 * error.xdot_prev2);
+    // Y-axis velocity
+    // error.ydot = Xdes.ydot - X.ydot;
+    // error.ydot_integral += error.ydot;
+    // error.ydot_integral = Quadrotor::CONSTRAIN(error.ydot_integral, -70, 70);
+    // Xdes.phi = (6.5 * error.ydot) + error.ydot_integral * 12.0 * dtOuter + (0.6/dtOuter)*(error.ydot - error.ydot_prev1);
+    // Xdes.phi = Quadrotor::CONSTRAIN(U1.current, -0.35, 0.35);
+    // U1.current = U1.current + 7.0;
+    // U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
+    // error.zdot_prev1 = error.zdot;
 
-        error.ydot = Wydot.output - X.ydot;
-        Xdes.theta = (1.0 * Xdes.theta_prev2)  + (0.09375 * error.ydot) + (0.0375 * error.ydot_prev1) + (0.00375 * error.ydot_prev2);
-      }
-
-      Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
-      Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
-
-      Xdes.phi_prev2 = Xdes.phi_prev1;
-      Xdes.phi_prev1 = Xdes.phi;
-      error.xdot_prev2 = error.xdot_prev1;
-      error.xdot_prev1 = error.xdot;
-
-      Xdes.theta_prev2 = Xdes.theta_prev1;
-      Xdes.theta_prev1 = Xdes.theta;
-      error.ydot_prev2 = error.ydot_prev1;
-      error.ydot_prev1 = error.ydot;
-    }
+    // Z-axis velocity
+    error.zdot = Xdes.zdot - X.zdot;
+    error.zdot_integral += error.zdot;
+    error.zdot_integral = Quadrotor::CONSTRAIN(error.zdot_integral, -70, 70);
+    U1.current = (6.5 * error.zdot) + error.zdot_integral * 12.0 * dtOuter + (0.6/dtOuter)*(error.zdot - error.zdot_prev1);
+    U1.current = Quadrotor::CONSTRAIN(U1.current, -4, 4);
+    U1.current = U1.current + 7.0;
+    U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
+    error.zdot_prev1 = error.zdot;
   }
 }
 
@@ -989,7 +1017,7 @@ void Quadrotor::GenerateMotorCommands(void)
 // Run Motors
 void Quadrotor::MotorRun(void)
 {
-  if (channel.CH3 > 1100)
+  if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
   {
     float input1 = PWM_FACTOR * PWM1;
     float input2 = PWM_FACTOR * PWM2;
@@ -1022,23 +1050,32 @@ void Quadrotor::XbeeZigbeeSend(void)
   {
     switch (Xbee_command)
     {
+      case 1279:
+        Serial1.print(U1.current); Serial1.print('\t');
+        Serial1.println();
+        break;
       case 1280:
-        Serial1.print(X.x); Serial1.print('\t');
-        Serial1.print(Xdes.x); Serial1.print('\t');
+        Serial1.print(voltage); Serial1.print('\t');
         Serial1.println();
         break;
       case 1281:
-        Serial1.print(X.y); Serial1.print('\t');
-        Serial1.print(Xdes.y); Serial1.print('\t');
+        Serial1.print(Xdes.psi * 180 / PI); Serial1.print('\t');
+        Serial1.print(X.psi * 180 / PI); Serial1.print('\t');
         Serial1.println();
         break;
       case 1282:
-        Serial1.print(X.z); Serial1.print('\t');
-        Serial1.print(Xdes.z); Serial1.print('\t');
+        Serial1.print(Xdes.zdot); Serial1.print('\t');
         Serial1.println();
         break;
-      case 1283:
-        Serial1.print(U1.current); Serial1.print('\t');
+      case 1290:
+        Serial1.print(X.x); Serial1.print('\t');
+        Serial1.println();
+        break;
+      case 1291:
+        Serial1.print(X.y); Serial1.print('\t');
+        Serial1.println();
+        break;
+      case 1292:
         Serial1.print(X.z); Serial1.print('\t');
         Serial1.println();
         break;

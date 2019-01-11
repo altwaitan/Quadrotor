@@ -2,7 +2,6 @@
 // Description: This research code is part of a long-term goal of
 // a fleet of cooperating Flexible Autonomous Machines operating in an uncertain Environment (FAME)
 // at Arizona State University
-
 #include "i2c_t3.h"
 #include "EEPROM.h"
 #include "Arduino.h"
@@ -77,7 +76,7 @@
 #define kpy 9
 #define kdy 0
 #define kiy 0
-#define kpz 4
+#define kpz 12
 #define kdz 0
 #define kiz 0
 
@@ -85,8 +84,9 @@ class Quadrotor
 {
 public:
   struct _STATE {
-    float x, y, z, phi, theta, psi, xdot, ydot, zdot, p, q, r;
+    float x, y, z, phi, theta, psi, xdot, ydot, zdot, p, q, r, xdotdot, ydotdot, zdotdot;
     float phi_prev1, phi_prev2, phi_prev3, theta_prev1, theta_prev2, theta_prev3;
+    Quaternion quaternion;
   };
   struct _XYZ {
     float x, y, z;
@@ -112,7 +112,7 @@ public:
   struct _ERROR {
     float p, q, r, p_prev1, p_prev2, p_prev3, q_prev1, q_prev2, q_prev3, r_prev1, r_prev2, r_prev3, p_integral, q_integral,  r_integral;
     float phi, theta, psi, phi_prev1, theta_prev1, psi_prev1, phi_integral, theta_integral,  psi_integral;
-    float xdot, xdot_prev1, xdot_prev2, xdot_prev3, ydot, ydot_prev1, ydot_prev2, ydot_prev3, zdot, zdot_prev1, zdot_prev2, zdot_prev3;
+    float xdot, xdot_prev1, xdot_prev2, xdot_prev3, ydot, ydot_prev1, ydot_prev2, ydot_prev3, zdot, zdot_prev1, zdot_prev2, zdot_prev3, zdot_integral;
     float x, y, z;
   };
   struct _Acc_Cali {

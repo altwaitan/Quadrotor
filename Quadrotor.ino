@@ -39,12 +39,12 @@ void loop()
   Quad.BatteryVoltageCheck();
   Quad.Estimation(1);
   Vive.HTCVive(&Quad);
-  Quad.Control(2);
+  Vive.HTCViveComplementaryFilter(&Quad);
+  Quad.Control(1);
   Quad.AttitudeControl();
-  Quad.ThrottleControl();
+  Quad.PositionControl();
   Quad.GenerateMotorCommands();
   Quad.XbeeZigbeeSend();
-  //Quad.XbeeZigbeeReceive();
 
   while (micros() - Quad.loop_timer < dtMicroseconds);
   // Reset the zero timer

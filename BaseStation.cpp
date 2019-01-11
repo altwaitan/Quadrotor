@@ -5,36 +5,39 @@
 // Source: Shi Lu, "Modeling, Control and Design of a Quadrotor Platform for Indoor Environments," 2018.
 void BaseStation::HTCVive(Quadrotor *quadrotor)
 {
-  String data = "";
-  while (Serial1.available() > 0)
+  if (quadrotor->channel.CH5 > 1900 && quadrotor->channel.CH5 < 2000)
   {
-    data += char(Serial1.read());
-  }
-  quadrotor->Xbee_length = data.length();
-
-  for (int i = 0; i < quadrotor->Xbee_length; i++)
-  {
-    quadrotor->Xbee_data[100 + i] = data[i];
-  }
-
-  if (quadrotor->Xbee_length == 4)
-  {
-    short temp = 0;
-    for (uint8_t i = 0; i < 4; i++)
+    String data = "";
+    while (Serial1.available() > 0)
     {
-      temp = temp * 10 + (quadrotor->Xbee_data[i] - '0');
+      data += char(Serial1.read());
     }
-    if (temp >= 1000 && temp <= 5000)
-      quadrotor->Xbee_command = temp;
-  }
-  else if (quadrotor->Xbee_length > 5 && quadrotor->Xbee_length < 12 && (quadrotor->Xbee_data[100 + 0] == '&' && quadrotor->Xbee_data[100 + 5] == '_' && quadrotor->Xbee_data[100 + quadrotor->Xbee_length - 1] == '*'))
-  {
-    // Ignore
-  }
-  else if (quadrotor->Xbee_length >= 20)
-  {
-    BaseStation::HTCViveProcess(quadrotor);
-    BaseStation::HTCViveMovingAverage(quadrotor);
+    quadrotor->Xbee_length = data.length();
+
+    for (int i = 0; i < quadrotor->Xbee_length; i++)
+    {
+      quadrotor->Xbee_data[100 + i] = data[i];
+    }
+
+    if (quadrotor->Xbee_length == 4)
+    {
+      short temp = 0;
+      for (uint8_t i = 0; i < 4; i++)
+      {
+        temp = temp * 10 + (quadrotor->Xbee_data[i] - '0');
+      }
+      if (temp >= 1000 && temp <= 5000)
+        quadrotor->Xbee_command = temp;
+    }
+    else if (quadrotor->Xbee_length > 5 && quadrotor->Xbee_length < 12 && (quadrotor->Xbee_data[100 + 0] == '&' && quadrotor->Xbee_data[100 + 5] == '_' && quadrotor->Xbee_data[100 + quadrotor->Xbee_length - 1] == '*'))
+    {
+      // Ignore
+    }
+    else if (quadrotor->Xbee_length >= 20)
+    {
+      BaseStation::HTCViveProcess(quadrotor);
+      BaseStation::HTCViveMovingAverage(quadrotor);
+    }
   }
 }
 
@@ -134,7 +137,7 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
             ptr = &temp;
-            quadrotor->X.psi = *(float *) ptr;
+            HTCViveState.psi = *(float *) ptr;
           }
         }
         break;
@@ -147,6 +150,8 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             unsigned long temp;
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
+            ptr = &temp;
+            HTCViveState.theta = *(float *) ptr;
           }
         }
         break;
@@ -159,6 +164,8 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             unsigned long temp;
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
+            ptr = &temp;
+            HTCViveState.phi = *(float *) ptr;
           }
         }
         break;
@@ -171,6 +178,8 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             unsigned long temp;
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
+            ptr = &temp;
+            quadrotor->X.quaternion.q[0] = *(float *) ptr;
           }
         }
         break;
@@ -183,6 +192,8 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             unsigned long temp;
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
+            ptr = &temp;
+            quadrotor->X.quaternion.q[1] = *(float *) ptr;
           }
         }
         break;
@@ -195,6 +206,8 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             unsigned long temp;
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
+            ptr = &temp;
+            quadrotor->X.quaternion.q[2] = *(float *) ptr;
           }
         }
         break;
@@ -207,6 +220,8 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             unsigned long temp;
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
+            ptr = &temp;
+            quadrotor->X.quaternion.q[3] = *(float *) ptr;
           }
         }
         break;
@@ -219,7 +234,7 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
             ptr = &temp;
-            quadrotor->Xdes.x = *(float *) ptr;
+            // quadrotor->Xdes.x = *(float *) ptr;
           }
         }
         break;
@@ -232,7 +247,7 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
             ptr = &temp;
-            quadrotor->Xdes.y = *(float *) ptr;
+            // quadrotor->Xdes.y = *(float *) ptr;
           }
         }
         break;
@@ -245,7 +260,7 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
             ptr = &temp;
-            quadrotor->Xdes.z = *(float *) ptr;
+            // quadrotor->Xdes.z = *(float *) ptr;
           }
         }
         break;
@@ -258,7 +273,7 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
             void* ptr;
             temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
             ptr = &temp;
-            quadrotor->Xdes.psi = *(float *) ptr;
+            // quadrotor->Xdes.psi = *(float *) ptr;
           }
         }
         break;
@@ -276,6 +291,44 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
         break;
     }
   }
+  // Phi
+  if (abs((quadrotor->X.phi * (180/PI)) - HTCViveState.phi) < 5.0)
+  {
+      HTCViveState.phi = (quadrotor->X.phi * (180/PI)) * 0.75 + HTCViveState.phi * 0.25;
+  }
+  else
+  {
+      HTCViveState.phi = (quadrotor->X.phi * (180/PI)) * 0.99 + HTCViveState.phi * 0.01;
+  }
+  HTCViveState.phi = HTCViveState.phi * (PI/180);
+  // Theta
+  if (abs((quadrotor->X.theta * (180/PI)) - HTCViveState.theta) < 5.0)
+  {
+      HTCViveState.theta = (quadrotor->X.theta * (180/PI)) * 0.75 + HTCViveState.theta * 0.25;
+  }
+  else
+  {
+      HTCViveState.theta = (quadrotor->X.theta * (180/PI)) * 0.99 + HTCViveState.theta * 0.01;
+  }
+  HTCViveState.theta = HTCViveState.theta * (PI/180);
+
+
+  float phi_sin = sin(HTCViveState.phi);
+  float theta_sin = sin(HTCViveState.theta);
+  float phi_cos = cos(HTCViveState.phi);
+  float theta_cos = cos(HTCViveState.theta);
+  float pre_cos , pre_sin, ob_cos, ob_sin, inc, cof = 0.70;
+  inc = (-phi_sin / theta_cos * (quadrotor->X.q * (180/PI)) + phi_cos / theta_cos * (quadrotor->X.r * (180/PI))) * dtOuter;
+  pre_cos = cos(((quadrotor->X.psi * (180/PI)) + inc) * (PI/180));
+  pre_sin = sin(((quadrotor->X.psi * (180/PI)) + inc) * (PI/180));
+  
+  ob_cos = cos((HTCViveState.psi) * (PI/180));
+  ob_sin = sin((HTCViveState.psi) * (PI/180));
+
+  pre_cos = pre_cos * cof + ob_cos * (1 - cof);
+  pre_sin = pre_sin * cof + ob_sin * (1 - cof);
+
+  quadrotor->X.psi = atan2(pre_sin , pre_cos);
 }
 
 // Moving Average to smooth the received data
@@ -288,11 +341,11 @@ void BaseStation::HTCViveMovingAverage(Quadrotor *quadrotor)
   quadrotor->X.xdot = quadrotor->CONSTRAIN(quadrotor->X.xdot, -50.0, 50.0);
   quadrotor->X.ydot = quadrotor->CONSTRAIN(quadrotor->X.ydot, -50.0, 50.0);
   quadrotor->X.zdot = quadrotor->CONSTRAIN(quadrotor->X.zdot, -50.0, 50.0);
-  quadrotor->Xdes.x = quadrotor->CONSTRAIN(quadrotor->Xdes.x, -1.5, 1.5);
-  quadrotor->Xdes.y = quadrotor->CONSTRAIN(quadrotor->Xdes.y, -1.5, 1.5);
-  quadrotor->Xdes.z = quadrotor->CONSTRAIN(quadrotor->Xdes.z, 0, 2.2);
+  // quadrotor->Xdes.x = quadrotor->CONSTRAIN(quadrotor->Xdes.x, -1.5, 1.5);
+  // quadrotor->Xdes.y = quadrotor->CONSTRAIN(quadrotor->Xdes.y, -1.5, 1.5);
+  // quadrotor->Xdes.z = quadrotor->CONSTRAIN(quadrotor->Xdes.z, 0, 2.2);
   quadrotor->X.psi = quadrotor->CONSTRAIN(quadrotor->X.psi, -180.0, 180.0);
-  quadrotor->Xdes.psi = quadrotor->CONSTRAIN(quadrotor->Xdes.psi, -180, 180);
+  // quadrotor->Xdes.psi = quadrotor->CONSTRAIN(quadrotor->Xdes.psi, -180, 180);
   /*------------Moving Average------------*/
   for (uint8_t j = 0; j < 13 ; j++)
   {
@@ -325,5 +378,60 @@ void BaseStation::HTCViveMovingAverage(Quadrotor *quadrotor)
   quadrotor->X.xdot = sum_average[3];
   quadrotor->X.ydot = sum_average[4];
   quadrotor->X.zdot = sum_average[5];
+}
 
+// Complimentary Filter
+// Source: Shi Lu, "Modeling, Control and Design of a Quadrotor Platform for Indoor Environments," 2018.
+void BaseStation::HTCViveComplementaryFilter(Quadrotor *quadrotor)
+{
+  HTCViveCounter++;
+  if (HTCViveCounter >= 4)
+  {
+    HTCViveCounter = 0;
+    float HTCViveNorm = quadrotor->invSqrt(quadrotor->X.quaternion.q[0] * quadrotor->X.quaternion.q[0] + quadrotor->X.quaternion.q[1] * quadrotor->X.quaternion.q[1] + quadrotor->X.quaternion.q[2] * quadrotor->X.quaternion.q[2] + quadrotor->X.quaternion.q[3] * quadrotor->X.quaternion.q[3]);
+    quadrotor->X.quaternion.q[0] *= HTCViveNorm;
+    quadrotor->X.quaternion.q[1] *= HTCViveNorm;
+    quadrotor->X.quaternion.q[2] *= HTCViveNorm;
+    quadrotor->X.quaternion.q[3] *= HTCViveNorm;
+
+
+    MatrixXf HTCVive_R(3, 3);
+    MatrixXf Acc_B(3, 1);
+    MatrixXf Acc_I(3, 1);
+
+    float q0_2, q1_2, q2_2, q3_2, q1q2, q0q3, q1q3, q0q2, q2q3, q0q1;
+
+    q0_2 = quadrotor->X.quaternion.q[0] * quadrotor->X.quaternion.q[0];
+    q1_2 = quadrotor->X.quaternion.q[1] * quadrotor->X.quaternion.q[1];
+    q2_2 = quadrotor->X.quaternion.q[2] * quadrotor->X.quaternion.q[2];
+    q3_2 = quadrotor->X.quaternion.q[3] * quadrotor->X.quaternion.q[3];
+
+    q1q2 = quadrotor->X.quaternion.q[1] * quadrotor->X.quaternion.q[2];
+    q0q3 = quadrotor->X.quaternion.q[0] * quadrotor->X.quaternion.q[3];
+    q1q3 = quadrotor->X.quaternion.q[1] * quadrotor->X.quaternion.q[3];
+    q0q2 = quadrotor->X.quaternion.q[0] * quadrotor->X.quaternion.q[2];
+    q2q3 = quadrotor->X.quaternion.q[2] * quadrotor->X.quaternion.q[3];
+    q0q1 = quadrotor->X.quaternion.q[0] * quadrotor->X.quaternion.q[1];
+
+    HTCVive_R << q0_2 + q1_2 - q2_2 - q3_2, 2 * (q1q2 - q0q3),  2 * (q1q3 + q0q2),
+           2 * (q1q2 + q0q3),  q0_2 - q1_2 + q2_2 - q3_2,  2 * (q2q3 - q0q1),
+           2 * (q1q3 - q0q2),  2 * (q2q3 + q0q1), q0_2 - q1_2 - q2_2 + q3_2;
+
+    Acc_B << (quadrotor->accel.filtered.x * 0.122/1000) * 9.8 , (quadrotor->accel.filtered.y * 0.122/1000) * 9.8 , (quadrotor->accel.filtered.z * 0.122/1000) * 9.8;
+    Acc_I =  HTCVive_R * Acc_B;
+
+    quadrotor->X.xdotdot = Acc_I(0, 0);
+    quadrotor->X.ydotdot = -Acc_I(1, 0);
+    quadrotor->X.zdotdot = Acc_I(2, 0) - 9.8;
+
+
+    float CF_a = 0.8, dtOuter_2 = dtOuter * dtOuter;
+    quadrotor->X.xdot = (quadrotor->X.xdot + dtOuter * quadrotor->X.xdotdot) * CF_a + quadrotor->X.xdot * (1 - CF_a);
+    quadrotor->X.ydot = (quadrotor->X.ydot + dtOuter * quadrotor->X.ydotdot) * CF_a + quadrotor->X.ydot * (1 - CF_a);
+    quadrotor->X.zdot = (quadrotor->X.zdot + dtOuter * quadrotor->X.zdotdot) * CF_a + quadrotor->X.zdot * (1 - CF_a);
+
+    quadrotor->X.x = (quadrotor->X.x + dtOuter * quadrotor->X.xdot + 0.5 * dtOuter_2 * quadrotor->X.xdotdot) * CF_a + quadrotor->X.x * (1 - CF_a);
+    quadrotor->X.y = (quadrotor->X.y + dtOuter * quadrotor->X.ydot + 0.5 * dtOuter_2 * quadrotor->X.ydotdot) * CF_a + quadrotor->X.y * (1 - CF_a);
+    quadrotor->X.z = (quadrotor->X.z + dtOuter * quadrotor->X.zdot + 0.5 * dtOuter_2 * quadrotor->X.zdotdot) * CF_a + quadrotor->X.z * (1 - CF_a);
+  }
 }
