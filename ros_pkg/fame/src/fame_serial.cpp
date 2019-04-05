@@ -1,3 +1,6 @@
+// Author: Abdullah Altawaitan
+// Date: April 4, 2019
+
 #include "ros/ros.h"
 #include <serial/serial.h>
 #include "sensor_msgs/Imu.h"
@@ -111,7 +114,7 @@ int main(int argc, char **argv)
   {
     fame.serialRead();
     ros::spinOnce();
-
+    loop_rate.sleep();
   }
 
   ros::shutdown();

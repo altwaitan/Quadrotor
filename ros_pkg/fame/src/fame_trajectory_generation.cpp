@@ -1,8 +1,12 @@
+// Author: Abdullah Altawaitan
+// Date: April 4, 2019
+
 #include "ros/ros.h"
 #include "fame/fame_state.h"
 #include "std_msgs/UInt8.h"
 
-
+double k = 0;
+int mode = 0;
 
 class fame_trajectory_generation
 {
@@ -11,7 +15,6 @@ public:
   ros::Subscriber sub;
   ros::Publisher pub;
   fame::fame_state state;
-  double k = 0;
 
   fame_trajectory_generation()
   {
@@ -26,10 +29,15 @@ public:
 
   void callback(const std_msgs::UInt8::ConstPtr& msg)
   {
+    mode = msg->data;
+  }
+
+  void publishGenerateTrajectory(void)
+  {
     // Trajectory Generation
-    if (msg->data != 0)
+    if (mode != 0)
     {
-      if (msg->data == 1)
+      if (mode == 1)
       {
         state.pose.position.x = 0;
         state.pose.position.y = 0;
@@ -43,7 +51,7 @@ public:
         state.attitude.z = 0;
         state.velocity.angular.z = 0;
       }
-      else if (msg->data == 2)
+      else if (mode == 2)
       {
         state.pose.position.x = 0.5 * sin(k * 0.6);
         state.pose.position.y = 0.5 * cos(k * 0.6);
@@ -85,8 +93,13 @@ int main(int argc, char **argv)
 
   ros::Rate loop_rate(100);
 
+  while (ros::ok())
+  {
+    fame.publishGenerateTrajectory();
+    ros::spinOnce();
+    loop_rate.sleep();
+  }
 
-  ros::spin();
   ros::shutdown();
   return 0;
 }

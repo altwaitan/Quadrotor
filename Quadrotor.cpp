@@ -674,11 +674,7 @@ void Quadrotor::AttitudeControl(void)
 
       if (channel.CH5 > 1600) // HTC Vive Base Station
       {
-        // Xdes.psi = RCYawRate;
-        // error.psi = Xdes.psi - X.psi;
-        // (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
-        // Xdes.r = 4 * error.psi;
-        // Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
+        // Already have a desired yaw rate
       }
       else
       {
@@ -764,25 +760,8 @@ void Quadrotor::AngularRateControl(void)
   // U3.current = Quadrotor::CONSTRAIN(U3.current, -1, 1);
   // U4.current = Quadrotor::CONSTRAIN(U4.current, -1, 1);
 
-  U2.prev3 = U2.prev2;
-  U2.prev2 = U2.prev1;
-  U2.prev1 = U2.current;
-  error.p_prev3 = error.p_prev2;
-  error.p_prev2 = error.p_prev1;
   error.p_prev1 = error.p;
-
-  U3.prev3 = U3.prev2;
-  U3.prev2 = U3.prev1;
-  U3.prev1 = U3.current;
-  error.q_prev3 = error.q_prev2;
-  error.q_prev2 = error.q_prev1;
   error.q_prev1 = error.q;
-
-  U4.prev3 = U4.prev2;
-  U4.prev2 = U4.prev1;
-  U4.prev1 = U4.current;
-  error.r_prev3 = error.r_prev2;
-  error.r_prev2 = error.r_prev1;
   error.r_prev1 = error.r;
 }
 
@@ -800,235 +779,6 @@ void Quadrotor::ThrottleControl(void)
   }
 }
 
-// Thrust to PWM Signal Mapping
-// Source: M. Faessler, D. Falanga, and D. Scaramuzza, "Thrust Mixing, Saturation, and Body-Rate Control for Accurate Aggressive Quadrotor Flight," IEEE Robot. Autom. Lett. (RA-L), vol. 2, no. 2, pp. 476–482, Apr. 2017.
-void Quadrotor::AltitudeControl(void)
-{
-  // Base Station is ON
-  if (channel.CH5 > 1600)
-  {
-    if (outerCounter >= 4)
-    {
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
-      {
-        Xdes.z = 0.6;
-        error.z = Xdes.z - X.z;
-        Xdes.zdot = 1.5 * error.z;
-        Xdes.zdot = Quadrotor::CONSTRAIN(Xdes.zdot, -4, 4);
-      }
-      else
-      {
-        Xdes.zdot = 0;
-      }
-    }
-
-    if (outerCounter >= 4)
-    {
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
-      {
-        error.zdot = Xdes.zdot - X.zdot;
-        error.zdot_integral += error.zdot;
-        error.zdot_integral = Quadrotor::CONSTRAIN(error.zdot_integral, -70, 70);
-        U1.current = (6.5 * error.zdot) + error.zdot_integral * 12.0 * dtOuter + (0.6/dtOuter)*(error.zdot - error.zdot_prev1);
-        U1.current = Quadrotor::CONSTRAIN(U1.current, -4, 4);
-        U1.current = U1.current + 7.0;
-        U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
-        error.zdot_prev1 = error.zdot;
-      }
-      else
-      {
-        U1.current = 0;
-      }
-    }
-  }
-  else // Base Station is OFF
-  {
-    Quadrotor::ThrottleControl();
-  }
-}
-
-void Quadrotor::PositionControl(void)
-{
-  // Base Station is ON
-  if (channel.CH5 > 1600)
-  {
-    if (outerCounter >= 4)
-    {
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
-      {
-        // // X-axis position
-        // Xdes.x = 0;
-        // error.x = Xdes.x - X.x;
-        // Xdes.xdot = 1 * error.x;
-        // Xdes.xdot = Quadrotor::CONSTRAIN(Xdes.xdot, -2, 2);
-        //
-        // // Y-axis position
-        // Xdes.y = 0;
-        // error.y = Xdes.y - X.y;
-        // Xdes.ydot = 1 * error.y;
-        // Xdes.ydot = Quadrotor::CONSTRAIN(Xdes.ydot, -2, 2);
-
-        // Z-axis position
-        Xdes.z = 0.5;
-        error.z = Xdes.z - X.z;
-        Xdes.zdot = 2 * error.z;
-        if (X.z < 0.35)
-        {
-          Xdes.zdot = Quadrotor::CONSTRAIN(Xdes.zdot, -0.2, 0.2);
-        }
-
-        Quadrotor::VelocityControl();
-      }
-      else
-      {
-        Xdes.xdot = 0;
-        Xdes.ydot = 0;
-        Xdes.zdot = 0;
-        U1.current = 0;
-      }
-    }
-  }
-  else // Base Station is OFF
-  {
-    Quadrotor::ThrottleControl();
-  }
-}
-
-void Quadrotor::VelocityControl(void)
-{
-  if (channel.CH5 > 1600)
-  {
-    // X-axis velocity
-    // float check1 = 0;
-    // float check2 = 0;
-    // error.xdot = (Xdes.xdot - X.xdot);
-    // error.xdot_integral += error.xdot;
-    // error.xdot_integral = Quadrotor::CONSTRAIN(error.xdot_integral, -70, 70);
-    // float Ux = 3 * error.xdot + 10 * dtOuter * error.xdot_integral + (0.1/dtOuter)*(error.xdot - error.xdot_prev1);
-    // float Ux_new = Quadrotor::CONSTRAIN(Ux, -30, 30);
-    // error.xdot_prev1 = error.xdot;
-    // // First Check
-    // if (Ux == Ux_new) // No wind-up
-    // {
-    //   check1 = 0;
-    // }
-    // else
-    // {
-    //   check1 = 1;
-    // }
-    // // Second Check
-    // if (Ux > 0 && error.xdot > 0)
-    // {
-    //   check2 = 1;
-    // }
-    // else if (Ux < 0 && error.xdot < 0)
-    // {
-    //   check2 = 1;
-    // }
-    // else
-    // {
-    //   check2 = 0;
-    // }
-    // // Finally
-    // if (check1 == 1 && check2 == 1)
-    // {
-    //   error.xdot_integral = 0;
-    // }
-    //
-    // // Y-axis velocity
-    // float check2_1 = 0;
-    // float check2_2 = 0;
-    // error.ydot = (Xdes.ydot - X.ydot);
-    // error.ydot_integral += error.ydot;
-    // error.ydot_integral = Quadrotor::CONSTRAIN(error.ydot_integral, -70, 70);
-    // float Uy = 3 * error.ydot + 10 * dtOuter * error.ydot_integral + (0.1/dtOuter)*(error.ydot - error.ydot_prev1);
-    // float Uy_new = Quadrotor::CONSTRAIN(Uy, -30, 30);
-    // error.ydot_prev1 = error.ydot;
-    //
-    // // First Check
-    // if (Uy == Uy_new) // No wind-up
-    // {
-    //   check2_1 = 0;
-    // }
-    // else
-    // {
-    //   check2_1 = 1;
-    // }
-    // // Second Check
-    // if (Uy > 0 && error.ydot > 0)
-    // {
-    //   check2_2 = 1;
-    // }
-    // else if (Uy < 0 && error.ydot < 0)
-    // {
-    //   check2_2 = 1;
-    // }
-    // else
-    // {
-    //   check2_2 = 0;
-    // }
-    // // Finally
-    // if (check2_1 == 1 && check2_2 == 1)
-    // {
-    //   error.ydot_integral = 0;
-    // }
-    //
-    // float sin_phi = (0.647/7.0) * (cos(X.psi) * Uy_new - sin(X.psi) * Ux_new);
-    // sin_phi = Quadrotor::CONSTRAIN(sin_phi, -1, 1);
-    // Xdes.phi = asin(sin_phi);
-    // Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
-    //
-    // float cos_phi = cos(Xdes.phi);
-    // float sin_theta = ((0.647/7.0)) * (-1*(cos(X.psi) * Ux_new + sin(X.psi) * Uy_new)) / cos_phi;
-    // sin_theta = Quadrotor::CONSTRAIN(sin_theta, -1, 1);
-    // Xdes.theta = asin(sin_theta);
-    // Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
-
-    // Shi Lu Code --------------------------------------------------------------
-    error.xdot = (Xdes.xdot - X.xdot) / 57.3;
-    float Ux = error.xdot * 6;
-    //Vy Control
-    error.ydot = (Xdes.ydot - X.ydot) / 57.3;
-    float Uy = error.ydot * 6;
-
-    float tmp_a, tmp_b, tmp_c1, tmp_c2, tmp_x1, tmp_x2;
-    tmp_a = cos(X.psi);
-    tmp_b = sin(X.psi);
-    tmp_c1 = Ux * 0.647 * (U1.current * 0.9);
-    tmp_c2 = Uy * 0.647 * (U1.current * 0.9);
-    //Target Phi
-    float sin_phi = tmp_a * tmp_c2 - tmp_b * tmp_c1;
-    sin_phi = Quadrotor::CONSTRAIN(sin_phi, -1, 1);
-    Xdes.phi = asin(sin_phi);
-    Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.26, 0.26);
-
-    //Target Theta
-    float cos_phi = cos(Xdes.phi);
-    float sin_theta = (-(tmp_a * tmp_c1 + tmp_b * tmp_c2))/cos_phi;
-    sin_theta = Quadrotor::CONSTRAIN(sin_theta, -1, 1);
-    Xdes.theta = asin(sin_theta);
-    Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.26, 0.26);
-    // Shi Lu Code --------------------------------------------------------------
-
-    // Z-axis velocity
-    error.zdot = Xdes.zdot - X.zdot;
-    error.zdot_integral += error.zdot;
-    error.zdot_integral = Quadrotor::CONSTRAIN(error.zdot_integral, -70, 70); // To prevent integrator wind-up
-    U1.current = (8 * error.zdot) +  (2 * dtOuter) * error.zdot_integral + (0.8/dtOuter)*(error.zdot - error.zdot_prev1);
-    U1.current = Quadrotor::CONSTRAIN(U1.current, -4, 4);
-    U1.current = ((U1.current + 7.0)) / (cos(X.theta) * cos(X.phi)); // Source: Axel Reizenstein, "Position and Trajectory Control of a Quadcopter Using PID and LQ Controllers," Master's Thesis, Linköping University, 2017.
-    error.zdot_prev2 = error.zdot_prev1;
-    error.zdot_prev1 = error.zdot;
-  }
-  else
-  {
-    error.zdot_prev2 = 0;
-    error.zdot_prev1 = 0;
-    error.xdot_integral = 0;
-    error.ydot_integral = 0;
-  }
-}
-
 void Quadrotor::DifferentialFlatness(void)
 {
   if (channel.CH5 > 1600)
@@ -1037,44 +787,7 @@ void Quadrotor::DifferentialFlatness(void)
     {
       if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
       {
-        // States
-        Xdes.zdot = 0;
-        // Error
-        error.x = X.x - Xdes.x;
-        error.y = X.y - Xdes.y;
-        error.z = X.z - Xdes.z;
-        error.xdot = X.xdot - Xdes.xdot;
-        error.ydot = X.ydot - Xdes.ydot;
-        error.zdot = X.zdot - Xdes.zdot;
-        error.psi = X.psi - Xdes.psi;
-        // LQR
-        float g1 = 1, g2 = 5;
-        float u1, u2, u3, u4;
-        u1 = -g1 * error.x - g2 * error.xdot;
-        u2 = -g1 * error.y - g2 * error.ydot;
-        u3 = -g1 * error.z - g2 * error.zdot;
-        u4 = -g1 * error.psi;
-
-        // Feedforward
-        Xdes.zdotdot = 0;
-        Xdes.r = 0;
-        float up_1, up_2, up_3, up_psi;
-        up_1 = u1 + Xdes.xdotdot;
-        up_2 = u2 + Xdes.ydotdot;
-        up_3 = u3 + Xdes.xdotdot + 9.81;
-        up_psi = u4 + Xdes.r;
-
-        // Inverse Mapping
-        float z1, z2, z3;
-        U1.current = mass * sqrt(up_1*up_1 + up_2*up_2 + up_3*up_3);
         U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
-        z1 = (mass/U1.current) * (up_1*cos(X.psi) + up_2*sin(X.psi));
-        z2 = (mass/U1.current) * (-up_1*sin(X.psi) + up_2*cos(X.psi));
-        z3 = (mass/U1.current) * up_3;
-        Xdes.phi = asin(z2);
-        Xdes.theta = atan(-z1/z3);
-        Xdes.r = up_psi*cos(Xdes.theta)*cos(Xdes.phi) + X.q*sin(Xdes.phi);
-
         Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
         Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
         Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
@@ -1148,57 +861,6 @@ void Quadrotor::MotorRun(void)
   analogWrite(MOTOR4, input4);
 }
 
-// XbeeZigbee Send Data Wirelessly
-// Source: (https://github.com/mattzzw/Arduino-mpu6050)
-void Quadrotor::XbeeZigbeeSend(void)
-{
-  Xbee_couter2++;
-  if (Xbee_couter2 >= 8)
-  {
-    switch (Xbee_command)
-    {
-      case 1279:
-        Serial1.print(voltage); Serial1.print('\t');
-        Serial1.println();
-        break;
-      case 1280:
-      Serial1.print(X.x); Serial1.print('\t');
-      Serial1.print(X.y); Serial1.print('\t');
-      Serial1.print(X.z); Serial1.print('\t');
-      Serial1.println();
-        break;
-      case 1281:
-        Serial1.print(Xdes.ydot); Serial1.print('\t');
-        Serial1.print(X.ydot); Serial1.print('\t');
-        Serial1.println();
-        break;
-      case 1282:
-      Serial1.print(Xdes.theta * 180 / PI); Serial1.print('\t');
-      Serial1.print(X.x); Serial1.print('\t');
-      Serial1.println();
-        break;
-      case 1290:
-        Serial1.print(X.x); Serial1.print('\t');
-        Serial1.println();
-        break;
-      case 1291:
-        Serial1.print(X.y); Serial1.print('\t');
-        Serial1.println();
-        break;
-      case 1292:
-        Serial1.print(X.z); Serial1.print('\t');
-        Serial1.println();
-        break;
-    }
-    Xbee_couter2 = 0;
-  }
-}
-
-// XbeeZigbee Receive Data Wirelessly
-// Source: (http://forum.arduino.cc/index.php?topic=396450)
-void Quadrotor::XbeeZigbeeReceive(void)
-{
-}
 
 // Second Order Low Pass Filter
 // Source: Leonard Hall (https://github.com/PX4/Firmware) PX4/Firmware/src/lib/mathlib/math/filter/LowPassFilter2p.cpp

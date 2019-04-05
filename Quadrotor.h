@@ -86,8 +86,7 @@ class Quadrotor
 {
 public:
   struct _STATE {
-    float x, y, z, phi, theta, psi, xdot, ydot, zdot, p, q, r, xdotdot, ydotdot, zdotdot;
-    float phi_prev1, phi_prev2, phi_prev3, theta_prev1, theta_prev2, theta_prev3;
+    float x, y, z, phi, theta, psi, xdot, ydot, zdot, p, q, r;
     Quaternion quaternion;
   };
   struct _XYZ {
@@ -228,8 +227,6 @@ public:
   void DifferentialFlatness(void);
   void GenerateMotorCommands(void);
   void MotorRun(void);
-  void XbeeZigbeeSend(void);
-  void XbeeZigbeeReceive(void);
   void SecondOrderLowPassFilter(float sample_freq, float cutoff_freq, struct _FILTER *input_IIR);
   void LoopCounter(void);
   float SecondOrderLowPassFilterApply(float cutoff_freq, float sample, struct _FILTER *input_IIR);

@@ -1,10 +1,10 @@
 // Author: Abdullah Altawaitan
 // Description: Teensy 3.2 code
-#include "BaseStation.h"
+#include "Communication.h"
 
 
 Quadrotor Quad;
-BaseStation Vive;
+Communication Vive;
 SBUS Radiolink(Serial2);
 
 void setup()
@@ -22,23 +22,19 @@ void setup()
 
 void loop()
 {
-
   // outerCounter for 100Hz
   Quad.outerCounter++;
   Receiver();
   Quad.ArmingState();
   Quad.BatteryVoltageCheck();
   Quad.Estimation(1);
-  Vive.HTCVive(&Quad);
-  Vive.HTCViveComplementaryFilter(&Quad);
+  Vive.ROS_Send(&Quad);
   Quad.Receiver();
   Quad.Control(1);
   Quad.DifferentialFlatness();
   Quad.AttitudeControl();
   Quad.GenerateMotorCommands();
-  Quad.XbeeZigbeeSend();
   Quad.LoopCounter();
-
 }
 
 void Teensy()
@@ -77,6 +73,5 @@ void Receiver()
 
 void serialEvent1()
 {
-  // Vive.HTCVive(&Quad, SerialMAV);
-  // Vive.HTCViveComplementaryFilter(&Quad);
+  Vive.ROS_Receive(&Quad);
 }

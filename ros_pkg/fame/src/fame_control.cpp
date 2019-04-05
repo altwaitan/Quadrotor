@@ -1,3 +1,6 @@
+// Author: Abdullah Altawaitan
+// Date: April 4, 2019
+
 #include "ros/ros.h"
 #include "fame/fame_state.h"
 #include "fame/fame_msg.h"

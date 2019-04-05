@@ -1,3 +1,6 @@
+// Author: Abdullah Altawaitan
+// Date: April 4, 2019
+
 #include "ros/ros.h"
 #include <serial/serial.h>
 #include "Eigen/Dense"
@@ -11,8 +14,10 @@
 #include "mavlink/mavlink.h"
 
 float x, y, z, vx, vy, vz, qw, qx, qy, qz;
+float x_offset, y_offset, z_offset;
 float sum_average[13];
 float moving_average[13][5];
+uint8_t initial = 0;
 class fame_filter
 {
 public:
@@ -153,10 +158,19 @@ public:
     state.velocity.linear.y = (state.velocity.linear.y + dtOuter * state.acceleration.linear.y) * CF_a + vy * (1 - CF_a);
     state.velocity.linear.z = (state.velocity.linear.z + dtOuter * state.acceleration.linear.z) * CF_a + vz * (1 - CF_a);
 
+    if (initial > 0 && initial < 10)
+    {
+      x_offset = state.pose.position.x;
+      y_offset = state.pose.position.y;
+      z_offset = state.pose.position.z;
+      initial = initial + 1;
+    }
     state.pose.position.x = (state.pose.position.x + dtOuter * state.velocity.linear.x + 0.5 * dtOuter_2 * state.acceleration.linear.x) * CF_a + x * (1 - CF_a);
     state.pose.position.y = (state.pose.position.y + dtOuter * state.velocity.linear.y + 0.5 * dtOuter_2 * state.acceleration.linear.y) * CF_a + y * (1 - CF_a);
     state.pose.position.z = (state.pose.position.z + dtOuter * state.velocity.linear.z + 0.5 * dtOuter_2 * state.acceleration.linear.z) * CF_a + z * (1 - CF_a);
-
+    state.pose.position.x = state.pose.position.x - x_offset;
+    state.pose.position.y = state.pose.position.y - y_offset;
+    state.pose.position.z = state.pose.position.z - z_offset;
     pub.publish(state);
 
   }
