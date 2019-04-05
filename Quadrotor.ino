@@ -4,30 +4,16 @@
 
 Quadrotor Quad;
 BaseStation Vive;
+SBUS Radiolink(Serial2);
 
 void setup()
 {
   Teensy();
-  delay(200);
   Quad.MotorInit();
-  delay(200);
   Quad.SensorInit();
-  delay(200);
   Quad.FilterInit();
-  delay(200);
- // Check the position of the reciver before starting
-  while (Quad.channel.CH3 < 990 || Quad.channel.CH3 > 1020 || Quad.channel.CH4 < 1400)
-  {
-    digitalWrite(LEDRed, LOW);
-    digitalWrite(LEDGreen, HIGH);
-    delay(200);
-    digitalWrite(LEDRed, HIGH);
-    digitalWrite(LEDGreen, LOW);
-    delay(200);
-  }
   digitalWrite(LEDRed, LOW);
   digitalWrite(LEDGreen, HIGH);
-
   Serial.println("Now Ready!");
   Quad.loop_timer = micros();
 }
@@ -35,100 +21,56 @@ void setup()
 
 void loop()
 {
+  // outerCounter for 100Hz
+  Quad.outerCounter++;
+  Receiver();
   Quad.ArmingState();
   Quad.BatteryVoltageCheck();
   Quad.Estimation(1);
   Vive.HTCVive(&Quad);
   Vive.HTCViveComplementaryFilter(&Quad);
+  Quad.Receiver();
   Quad.Control(1);
+  Quad.DifferentialFlatness();
   Quad.AttitudeControl();
-  Quad.PositionControl();
   Quad.GenerateMotorCommands();
   Quad.XbeeZigbeeSend();
+  Quad.LoopCounter();
 
-  while (micros() - Quad.loop_timer < dtMicroseconds);
-  // Reset the zero timer
-  Quad.loop_timer = micros();
 }
 
 void Teensy()
 {
   Serial.begin(230400);
   Serial1.begin(230400);
+  Radiolink.begin();
   pinMode(LEDRed, OUTPUT);
   pinMode(LEDGreen, OUTPUT);
   digitalWrite(LEDGreen, LOW);
   digitalWrite(LEDRed, LOW);
-  delay(5);
-  pinMode(CHANNEL1, INPUT);
-  pinMode(CHANNEL2, INPUT);
-  pinMode(CHANNEL3, INPUT);
-  pinMode(CHANNEL4, INPUT);
-  pinMode(CHANNEL5, INPUT);
-  attachInterrupt(CHANNEL1, Receiver, CHANGE);
-  attachInterrupt(CHANNEL2, Receiver, CHANGE);
-  attachInterrupt(CHANNEL3, Receiver, CHANGE);
-  attachInterrupt(CHANNEL4, Receiver, CHANGE);
-  attachInterrupt(CHANNEL5, Receiver, CHANGE);
-  delay(50);
+  Quad.channel.CH1 = 1000;
+  Quad.channel.CH2 = 1000;
+  Quad.channel.CH3 = 250;
+  Quad.channel.CH4 = 1000;
+  Quad.channel.CH5 = 250;
+  Quad.channel.CH6 = 250;
 }
 
 void Receiver()
 {
-  if (Quad.lastChannel1 == 0 && digitalReadFast(CHANNEL1) == HIGH)
-   {
-     Quad.lastChannel1 = 1;
-     Quad.receiverChannelTimer1 = micros();
-   }
-   if (Quad.lastChannel1 == 1 && digitalReadFast(CHANNEL1) == LOW)
-   {
-     Quad.lastChannel1 = 0;
-     Quad.channel.CH1 = micros() - Quad.receiverChannelTimer1;
-   }
-
-   if (Quad.lastChannel2 == 0 && digitalReadFast(CHANNEL2) == HIGH)
-    {
-      Quad.lastChannel2 = 1;
-      Quad.receiverChannelTimer2 = micros();
-    }
-    if (Quad.lastChannel2 == 1 && digitalReadFast(CHANNEL2) == LOW)
-    {
-      Quad.lastChannel2 = 0;
-      Quad.channel.CH2 = micros() - Quad.receiverChannelTimer2;
-    }
-
-    if (Quad.lastChannel3 == 0 && digitalReadFast(CHANNEL3) == HIGH)
-     {
-       Quad.lastChannel3 = 1;
-       Quad.receiverChannelTimer3 = micros();
-     }
-     if (Quad.lastChannel3 == 1 && digitalReadFast(CHANNEL3) == LOW)
-     {
-       Quad.lastChannel3 = 0;
-       Quad.channel.CH3 = micros() - Quad.receiverChannelTimer3;
-     }
-
-     if (Quad.lastChannel4 == 0 && digitalReadFast(CHANNEL4) == HIGH)
-      {
-        Quad.lastChannel4 = 1;
-        Quad.receiverChannelTimer4 = micros();
-      }
-      if (Quad.lastChannel4 == 1 && digitalReadFast(CHANNEL4) == LOW)
-      {
-        Quad.lastChannel4 = 0;
-        Quad.channel.CH4 = micros() - Quad.receiverChannelTimer4;
-      }
-
-      if (Quad.lastChannel5 == 0 && digitalReadFast(CHANNEL5) == HIGH)
-       {
-         Quad.lastChannel5 = 1;
-         Quad.receiverChannelTimer5 = micros();
-       }
-       if (Quad.lastChannel5 == 1 && digitalReadFast(CHANNEL5) == LOW)
-       {
-         Quad.lastChannel5 = 0;
-         Quad.channel.CH5 = micros() - Quad.receiverChannelTimer5;
-       }
+  if (Radiolink.read(Quad.channels, &Quad.failSafe, &Quad.lostFrames))
+  {
+    Quad.channel.CH1 = Quad.channels[0];
+    Quad.channel.CH2 = Quad.channels[1];
+    Quad.channel.CH3 = Quad.channels[2];
+    Quad.channel.CH4 = Quad.channels[3];
+    Quad.channel.CH5 = Quad.channels[4];
+    Quad.channel.CH6 = Quad.channels[5];
+    Quad.channel.CH7 = Quad.channels[6];
+    Quad.channel.CH8 = Quad.channels[7];
+    Quad.channel.CH9 = Quad.channels[8];
+    Quad.channel.CH10 = Quad.channels[9];
+  }
 }
 
 void serialEvent1()
@@ -143,42 +85,3 @@ void serialEvent1()
     Quad.Xbee_couter = 0;
   }
 }
-
-// void serialEvent1()
-// {
-//   static boolean recvInProgress = false;
-//   static byte ndx = 0;
-//   char startMarker = '<';
-//   char endMarker = '>';
-//   char rc;
-//
-//   while (Serial1.available() > 0 && Quad.newData == false)
-//   {
-//       rc = Serial1.read();
-//
-//       if (recvInProgress == true)
-//       {
-//         if (rc != endMarker)
-//         {
-//           Quad.receivedChars[ndx] = rc;
-//           ndx++;
-//           if (ndx >= Quad.numChars)
-//           {
-//             ndx = Quad.numChars - 1;
-//           }
-//         }
-//         else
-//         {
-//           Quad.receivedChars[ndx] = '\0'; // terminate the string
-//           recvInProgress = false;
-//           ndx = 0;
-//           Quad.newData = true;
-//         }
-//       }
-//
-//       else if (rc == startMarker)
-//       {
-//         recvInProgress = true;
-//       }
-//   }
-// }

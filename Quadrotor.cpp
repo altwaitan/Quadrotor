@@ -3,32 +3,23 @@
 // Motor initialization
 void Quadrotor::MotorInit(void)
 {
+  voltage = (float)analogRead(A14) * 0.020557;
   pinMode(MOTOR1, OUTPUT);
   pinMode(MOTOR2, OUTPUT);
   pinMode(MOTOR3, OUTPUT);
   pinMode(MOTOR4, OUTPUT);
-  delay(5);
   analogWriteFrequency(MOTOR1, 400);
   analogWriteFrequency(MOTOR2, 400);
   analogWriteFrequency(MOTOR3, 400);
   analogWriteFrequency(MOTOR4, 400);
   analogWriteResolution(16);
-  delay(5);
 
   // Motors initialization
-  float PWM = PWM_FACTOR * MIN_MOTOR_LEVEL;
+  float PWM = PWM_FACTOR * OFF_MOTOR_LEVEL;
   analogWrite(MOTOR1, PWM);
   analogWrite(MOTOR2, PWM);
   analogWrite(MOTOR3, PWM);
   analogWrite(MOTOR4, PWM);
-
-  // Reset integral variables
-  error.p_integral = 0;
-  error.q_integral = 0;
-  error.r_integral = 0;
-  error.phi_integral = 0;
-  error.theta_integral = 0;
-  error.psi_integral = 0;
 }
 
 // Sensor initialization and calibration
@@ -38,10 +29,11 @@ void Quadrotor::SensorInit(void)
 {
   Wire.begin();
   Wire.setRate(I2C_RATE_2000);
-  delay(200);
+  Wire1.begin();
+  Wire1.setRate(I2C_RATE_2000);
+
   // Gyroscope initialization
   imu.Init();
-  delay(200);
 
   // Sensor calibration
   Serial.println("Sensor Calibration...");
@@ -105,11 +97,6 @@ void Quadrotor::SensorInit(void)
 
   Quadrotor::AccelOffsetRead();
   accel_calibration_done = 1;
-  while (gyro_calibration_done == 0 && gyro_calibration_counter <= 1500)
-  {
-    gyro_calibration_counter++;
-    GyroCalibration();
-  }
   Serial.println("Sensor Calibration... Done!");
 }
 
@@ -125,9 +112,25 @@ void Quadrotor::IMUread(void)
   gyro.raw.y = imu.g.y;
   gyro.raw.z = imu.g.z;
 
+  // Sensor Thermal Compensation
+  float temp, temp2, temp3;
+  temperature = (float) imu.temp / 340.0 + 36.53;
+  temp = temperature;
+  temp = Quadrotor::CONSTRAIN(temp, 22.5, 55.0);
+  temp2 = temp * temp;
+  temp3 = temp * temp * temp;
+  gyro.tempOffset.x = 0.000263 * temp3 - 0.03098 * temp2 + 0.03939 * temp - 29.4;
+  gyro.tempOffset.y = -0.0004279 * temp3 + 0.05322 * temp2 - 2.941 * temp + 80.16;
+  gyro.tempOffset.z = 0.0004163 * temp3 - 0.0332 * temp2 + 0.6652 * temp + 23.3;
   gyro.calibrated.x = (gyro.raw.x - gyro.tempOffset.x);
   gyro.calibrated.y = (gyro.raw.y - gyro.tempOffset.y);
   gyro.calibrated.z = (gyro.raw.z - gyro.tempOffset.z);
+
+  if (gyro_calibration_done == 0 && gyro_calibration_counter <= 1500)
+  {
+    gyro_calibration_counter++;
+    GyroCalibration();
+  }
 
   if (gyro_calibration_done == 1)
   {
@@ -135,9 +138,21 @@ void Quadrotor::IMUread(void)
     gyro.calibrated.y = gyro.calibrated.y - gyro.gyroOffset.y;
     gyro.calibrated.z = gyro.calibrated.z - gyro.gyroOffset.z;
 
-    gyroAngle.x += gyro.calibrated.x * dt;
-    gyroAngle.y += gyro.calibrated.y * dt;
-    gyroAngle.z += gyro.calibrated.z * dt;
+    gyro.filtered.x = Quadrotor::SecondOrderLowPassFilterApply(30.0, gyro.calibrated.x, &gyroFilterParameterX);
+    gyro.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, -gyro.calibrated.y, &gyroFilterParameterY);
+    gyro.filtered.z = Quadrotor::SecondOrderLowPassFilterApply(30.0, -gyro.calibrated.z, &gyroFilterParameterZ);
+
+    float p_deg = gyro.filtered.x / 32.768;
+    float q_deg = gyro.filtered.y / 32.768;
+    float r_deg = gyro.filtered.z / 32.768;
+
+    X.p = p_deg * (PI/180);
+    X.q = q_deg * (PI/180);
+    X.r = r_deg * (PI/180);
+
+    gyroAngle.x += p_deg * dt;
+    gyroAngle.y += q_deg * dt;
+    gyroAngle.z += r_deg * dt;
   }
 
   if (accel_calibration_done == 1)
@@ -149,6 +164,10 @@ void Quadrotor::IMUread(void)
     accel.calibrated.x = accel.afterOffset.x *  Acc_Cali.T[0][0] + accel.afterOffset.y *  Acc_Cali.T[1][0] + accel.afterOffset.z *  Acc_Cali.T[2][0];
     accel.calibrated.y = accel.afterOffset.x *  Acc_Cali.T[0][1] + accel.afterOffset.y *  Acc_Cali.T[1][1] + accel.afterOffset.z *  Acc_Cali.T[2][1];
     accel.calibrated.z = accel.afterOffset.x *  Acc_Cali.T[0][2] + accel.afterOffset.y *  Acc_Cali.T[1][2] + accel.afterOffset.z *  Acc_Cali.T[2][2];
+
+    accel.filtered.x = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.x, &accelFilterParameterX);
+    accel.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.y, &accelFilterParameterY);
+    accel.filtered.z = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.z, &accelFilterParameterZ);
   }
 }
 
@@ -362,33 +381,15 @@ void Quadrotor::NonlinearComplementaryFilter(void)
 void Quadrotor::AHRS(void)
 {
   Quadrotor::IMUread();
-
-  gyro.filtered.x = Quadrotor::SecondOrderLowPassFilterApply(30.0, gyro.calibrated.x, &gyroFilterParameterX);
-  gyro.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, -gyro.calibrated.y, &gyroFilterParameterY);
-  gyro.filtered.z = Quadrotor::SecondOrderLowPassFilterApply(30.0, -gyro.calibrated.z, &gyroFilterParameterZ);
-
-  accel.filtered.x = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.x, &accelFilterParameterX);
-  accel.filtered.y = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.y, &accelFilterParameterY);
-  accel.filtered.z = Quadrotor::SecondOrderLowPassFilterApply(30.0, accel.calibrated.z, &accelFilterParameterZ);
-
-  float p_deg = gyro.filtered.x * 0.07;
-  float q_deg = gyro.filtered.y * 0.07;
-  float r_deg = gyro.filtered.z * 0.07;
-
-
-  X.p = p_deg * (PI/180);
-  X.q = q_deg * (PI/180);
-  X.r = r_deg * (PI/180);
-
   Quadrotor::MahonyAHRS();
 }
 
 void Quadrotor::MahonyAHRS()
 {
   float quat[4], ypr[3], gx, gy, gz, AHRS_val[9];
-  AHRS_val[0] = accel.filtered.x * 0.122/1000;
-  AHRS_val[1] = accel.filtered.y * 0.122/1000;
-  AHRS_val[2] = accel.filtered.z * 0.122/1000;
+  AHRS_val[0] = accel.filtered.x / 8192.0;
+  AHRS_val[1] = accel.filtered.y / 8192.0;
+  AHRS_val[2] = accel.filtered.z / 8192.0;
   AHRS_val[3] = X.p;
   AHRS_val[4] = -X.q;
   AHRS_val[5] = -X.r;
@@ -411,7 +412,7 @@ void Quadrotor::MahonyAHRS()
   X.phi = ypr[2];
   X.theta = ypr[1];
   // When the base stations are off
-  if (channel.CH5 < 1900)
+  if (channel.CH5 < 1600)
   {
     X.psi = ypr[0];
   }
@@ -497,11 +498,11 @@ void Quadrotor::MahonyAHRSUpdate(float gx, float gy, float gz, float ax, float a
 // Quadrotor States of Operation
 void Quadrotor::ArmingState(void)
 {
-  if (QuadrotorState == START_MODE && channel.CH3 < 1020 && channel.CH4 < 1020)
+  if (QuadrotorState == START_MODE && channel.CH3 < 320 && channel.CH4 < 320)
   {
     QuadrotorState = TRANS_MODE;
   }
-  if (QuadrotorState == TRANS_MODE && channel.CH3 < 1020 && channel.CH4 > 1400 && channel.CH4 < 1800)
+  if (QuadrotorState == TRANS_MODE && channel.CH3 < 320 && channel.CH4 > 900 && channel.CH4 < 1500)
   {
     QuadrotorState = ARMING_MODE;
     // Reset variables
@@ -512,15 +513,15 @@ void Quadrotor::ArmingState(void)
     error.theta_integral = 0;
     error.psi_integral = 0;
   }
-  if (QuadrotorState == ARMING_MODE && channel.CH3 < 1020 && channel.CH4 < 1020)
+  if (QuadrotorState == ARMING_MODE && channel.CH3 < 320 && channel.CH4 < 320)
   {
     QuadrotorState = TEMP_MODE;
   }
-  if (QuadrotorState == TEMP_MODE && channel.CH3 < 1020 && channel.CH4 > 1400 && channel.CH4 < 1800)
+  if (QuadrotorState == TEMP_MODE && channel.CH3 < 320 && channel.CH4 > 900 && channel.CH4 < 1500)
   {
     QuadrotorState = START_MODE;
   }
-  if (channel.CH3 < 1020 && channel.CH4 > 1800)
+  if (channel.CH3 < 320 && channel.CH4 > 1600)
   {
     QuadrotorState = DISARMING_MODE;
   }
@@ -529,11 +530,11 @@ void Quadrotor::ArmingState(void)
 // Checking Battery Voltage
 void Quadrotor::BatteryVoltageCheck(void)
 {
-  float v = (float)analogRead(A14) * 0.020462;
-  voltage = v * 0.08 + voltage * 0.92;
-  if (voltage < 10.8)
+  float v = (float)analogRead(A14) * 0.020557;
+  voltage = v * 0.005 + voltage * 0.995;
+  voltage = Quadrotor::CONSTRAIN(voltage, 9.0, 17.0);
+  if (voltage < 10.5)
   {
-
     if (blink == 0)
     {
       if (blinkCounter <= 160)
@@ -599,40 +600,47 @@ void Quadrotor::BatteryVoltageCheck(void)
 // RC Remote Signal Receiver
 void Quadrotor::Receiver(void)
 {
-  // Remote range from 1000 to 1850
-  // positive angles (1433 to 1850), negative angles (1000 to 1417), and zero (1417 to 1433)
-  Xdes.phi = 0;
-  if (channel.CH1 > 1450) {
-    float phi_desired_degree = (channel.CH1 - 1433) / 20;
-    Xdes.phi = phi_desired_degree * (PI / 180.0);
-  }
-  else if (channel.CH1 < 1400) {
-    float phi_desired_degree = (channel.CH1 - 1417) / 20;
-    Xdes.phi = phi_desired_degree * (PI / 180.0);
-  }
-  Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
+  if (channel.CH5 < 1600)
+  {
+    Xdes.phi = 0;
+    if (channel.CH1 > 1100)
+    {
+      float phi_desired_degree = (channel.CH1 - 1100) / 40;
+      Xdes.phi = phi_desired_degree * (PI / 180.0);
+    }
+    else if (channel.CH1 < 900)
+    {
+      float phi_desired_degree = (channel.CH1 - 900) / 40;
+      Xdes.phi = phi_desired_degree * (PI / 180.0);
+    }
+    Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
 
-  Xdes.theta = 0;
-  if (channel.CH2 > 1450) {
-    float theta_desired_degree = (channel.CH2 - 1433) / 20;
-    Xdes.theta = theta_desired_degree * (PI / 180.0);
-  }
-  else if (channel.CH2 < 1400) {
-    float theta_desired_degree = (channel.CH2 - 1417) / 20;
-    Xdes.theta = theta_desired_degree * (PI / 180.0);
-  }
-  Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
+    Xdes.theta = 0;
+    if (channel.CH2 > 1100)
+    {
+      float theta_desired_degree = (channel.CH2 - 1100) / 40;
+      Xdes.theta = theta_desired_degree * (PI / 180.0);
+    }
+    else if (channel.CH2 < 900)
+    {
+      float theta_desired_degree = (channel.CH2 - 900) / 40;
+      Xdes.theta = theta_desired_degree * (PI / 180.0);
+    }
+    Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
 
-  RCYawRate = 0;
-  if (channel.CH4 > 1433) {
-    float psi_desired_degree = (channel.CH4 - 1433) / 10;
-    RCYawRate = psi_desired_degree * (PI / 180.0);
+    RCYawRate = 0;
+    if (channel.CH4 > 1100)
+    {
+      float psi_desired_degree = (channel.CH4 - 1100) / 10;
+      RCYawRate = psi_desired_degree * (PI / 180.0);
+    }
+    else if (channel.CH4 < 900)
+    {
+      float psi_desired_degree = (channel.CH4 - 900) / 10;
+      RCYawRate = psi_desired_degree * (PI / 180.0);
+    }
+    RCYawRate = Quadrotor::CONSTRAIN(RCYawRate, -0.7, 0.7);
   }
-  else if (channel.CH4 < 1417) {
-    float psi_desired_degree = (channel.CH4 - 1417) / 10;
-    RCYawRate = psi_desired_degree * (PI / 180.0);
-  }
-  Quadrotor::CONSTRAIN(RCYawRate, -0.7, 0.7);
 }
 
 // Choosing the control method:
@@ -647,38 +655,30 @@ void Quadrotor::Control(int8_t method)
 // P Controller
 void Quadrotor::AttitudeControl(void)
 {
-  outerCounter++;
   if (outerCounter >= 4)
   {
-    outerCounter = 0;
-    Quadrotor::Receiver();
     Wp.input = 0;
     Wq.input = 0;
     Wr.input = 0;
     Wp.output = 0;
     Wq.output = 0;
     Wr.output = 0;
-    error.phi = 0;
-    error.theta = 0;
-    error.psi = 0;
 
-    if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+    if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
     {
       error.phi = Xdes.phi - X.phi;
       Xdes.p = kpx * error.phi;
-      Xdes.p = Quadrotor::CONSTRAIN(Xdes.p, -4.4, 4.4);
 
       error.theta = Xdes.theta - X.theta;
       Xdes.q = kpy * error.theta;
-      Xdes.q = Quadrotor::CONSTRAIN(Xdes.q, -4.4, 4.4);
 
-      if (channel.CH5 > 1900)
+      if (channel.CH5 > 1600) // HTC Vive Base Station
       {
-        Xdes.psi = RCYawRate;
-        error.psi = Xdes.psi - X.psi;
-        (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
-        Xdes.r = kpz * error.psi;
-        Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -0.7, 0.7);
+        // Xdes.psi = RCYawRate;
+        // error.psi = Xdes.psi - X.psi;
+        // (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
+        // Xdes.r = 4 * error.psi;
+        // Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
       }
       else
       {
@@ -687,29 +687,14 @@ void Quadrotor::AttitudeControl(void)
         Xdes.r = kpz * error.psi;
         Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -0.7, 0.7);
 
-        if (control_method == 1) // Classical PID
+        if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
         {
-          if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
-          {
-            Xdes.r = RCYawRate;
-            Xdes.psi = X.psi;
-          }
-          if (channel.CH3 < 1080)
-          {
-            Xdes.psi = X.psi;
-          }
+          Xdes.r = RCYawRate;
+          Xdes.psi = X.psi;
         }
-        else if (control_method == 2) // Pole-Placement
+        if (channel.CH3 < 320)
         {
-          if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
-          {
-            Xdes.r = RCYawRate;
-            Xdes.psi = X.psi;
-          }
-          if (channel.CH3 < 1080)
-          {
-            Xdes.psi = X.psi;
-          }
+          Xdes.psi = X.psi;
         }
       }
 
@@ -729,8 +714,6 @@ void Quadrotor::AttitudeControl(void)
       Wr.output = Quadrotor::CONSTRAIN(Wr.output, -0.7, 0.7);
     }
 
-
-
     Wp.output_prev1 = Wp.output;
     Wp.input_prev1 = Wp.input;
     Wq.output_prev1 = Wq.output;
@@ -748,73 +731,38 @@ void Quadrotor::AngularRateControl(void)
   U2.current = 0;
   U3.current = 0;
   U4.current = 0;
-  error.p = 0;
-  error.q = 0;
-  error.r = 0;
-  if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+  if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
   {
     if (control_method == 1) // Classical PID
     {
       error.p = Xdes.p - X.p;
-      error.p_integral += error.p;
-      error.p_integral = Quadrotor::CONSTRAIN(error.p_integral, -70, 70);
-      U2.current = error.p * kpPQRx + error.p_integral * kiPQRx * dt + (error.p - error.p_prev1) * kdPQRx / dt;
+      U2.current = error.p * kpPQRx + (error.p - error.p_prev1) * kdPQRx / dt;
       error.p_prev1 = error.p;
 
       error.q = Xdes.q - X.q;
-      error.q_integral += error.q;
-      error.q_integral = Quadrotor::CONSTRAIN(error.q_integral, -70, 70);
-      U3.current = error.q * kpPQRy + error.q_integral * kiPQRy * dt + (error.q - error.q_prev1) * kdPQRy / dt;
+      U3.current = error.q * kpPQRy + (error.q - error.q_prev1) * kdPQRy / dt;
       error.q_prev1 = error.q;
 
       // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
-      error.r = Xdes.r - X.r;
-      error.r_integral += error.r;
-      error.r_integral = Quadrotor::CONSTRAIN(error.r_integral, -70, 70);
-      U4.current = error.r * kpPQRz + error.r_integral * kiPQRz * dt + (error.r - error.r_prev1) * kdPQRz / dt;
-      error.r_prev1 = error.r;
-    }
-    else if (control_method == 2) // Pole-Placement
-    {
-      // Settling time = 0.25s, Overshoot = 0.05
-      error.p = Wp.output - X.p;
-      U2.current = (2.2 * U2.prev1) - (1.56 * U2.prev2) + (0.36 * U2.prev3) + (0.1144 * error.p) - (0.103 * error.p_prev1) - (0.1142 * error.p_prev2) + (0.1033 * error.p_prev3);
-
-      // Settling time = 0.25s, Overshoot = 0.05
-      error.q = Wq.output - X.q;
-      U3.current = (2.2 * U3.prev1) - (1.56 * U3.prev2) + (0.36 * U3.prev3) + (0.1346 * error.q) - (0.1212 * error.q_prev1) - (0.1343 * error.q_prev2) + (0.1215 * error.q_prev3);
-
-      // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
-      // Settling time = 0.4s, Overshoot = 0.05
-      error.r = Wr.output - X.r;
-      U4.current = (2.2 * U4.prev1) - (1.56 * U4.prev2) + (0.36 * U4.prev3) + (0.1417 * error.r) - (0.1302 * error.r_prev1) - (0.1415 * error.r_prev2) + (0.1304 * error.r_prev3);
-    }
-    else // PID
-    {
-      error.p = Xdes.p - X.p;
-      error.p_integral += error.p;
-      error.p_integral = Quadrotor::CONSTRAIN(error.p_integral, -70, 70);
-      U2.current = error.p * kpPQRx + error.p_integral * kiPQRx * dt + (error.p - error.p_prev1) * kdPQRx / dt;
-      error.p_prev1 = error.p;
-
-      error.q = Xdes.q - X.q;
-      error.q_integral += error.q;
-      error.q_integral = Quadrotor::CONSTRAIN(error.q_integral, -70, 70);
-      U3.current = error.q * kpPQRy + error.q_integral * kiPQRy * dt + (error.q - error.q_prev1) * kdPQRy / dt;
-      error.q_prev1 = error.q;
-
-      // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
-      error.r = Xdes.r - X.r;
-      error.r_integral += error.r;
-      error.r_integral = Quadrotor::CONSTRAIN(error.r_integral, -70, 70);
-      U4.current = error.r * kpPQRz + error.r_integral * kiPQRz * dt + (error.r - error.r_prev1) * kdPQRz / dt;
-      error.r_prev1 = error.r;
+      // Base Station is ON
+      if (channel.CH5 > 1600)
+      {
+        error.r = Xdes.r - X.r;
+        U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt;
+        error.r_prev1 = error.r;
+      }
+      else // Base Station is OFF
+      {
+        error.r = Xdes.r - X.r;
+        U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt;
+        error.r_prev1 = error.r;
+      }
     }
   }
 
-  U2.current = Quadrotor::CONSTRAIN(U2.current, -1, 1);
-  U3.current = Quadrotor::CONSTRAIN(U3.current, -1, 1);
-  U4.current = Quadrotor::CONSTRAIN(U4.current, -1, 1);
+  // U2.current = Quadrotor::CONSTRAIN(U2.current, -1, 1);
+  // U3.current = Quadrotor::CONSTRAIN(U3.current, -1, 1);
+  // U4.current = Quadrotor::CONSTRAIN(U4.current, -1, 1);
 
   U2.prev3 = U2.prev2;
   U2.prev2 = U2.prev1;
@@ -840,11 +788,11 @@ void Quadrotor::AngularRateControl(void)
 
 void Quadrotor::ThrottleControl(void)
 {
-  if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+  if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
   {
-    float Thrust = 4 * ((0.000006419 * channel.CH3 * channel.CH3) + (-0.008914 * channel.CH3) + 2.06);
-    U1.current = Thrust / 2;
-    U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 10);;
+    float Thrust = 0.008193 * channel.CH3 - 2.458;
+    U1.current = Thrust / (cos(X.phi)*cos(X.theta));
+    U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);;
   }
   else
   {
@@ -857,13 +805,11 @@ void Quadrotor::ThrottleControl(void)
 void Quadrotor::AltitudeControl(void)
 {
   // Base Station is ON
-  if (channel.CH5 > 1900)
+  if (channel.CH5 > 1600)
   {
-    altitudeOuterCounter++;
-    if (altitudeOuterCounter >= 4)
+    if (outerCounter >= 4)
     {
-      altitudeOuterCounter = 0;
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
       {
         Xdes.z = 0.6;
         error.z = Xdes.z - X.z;
@@ -876,11 +822,9 @@ void Quadrotor::AltitudeControl(void)
       }
     }
 
-    altitudeCounter++;
-    if (altitudeCounter >= 4)
+    if (outerCounter >= 4)
     {
-      altitudeCounter = 0;
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
       {
         error.zdot = Xdes.zdot - X.zdot;
         error.zdot_integral += error.zdot;
@@ -906,24 +850,39 @@ void Quadrotor::AltitudeControl(void)
 void Quadrotor::PositionControl(void)
 {
   // Base Station is ON
-  if (channel.CH5 > 1900)
+  if (channel.CH5 > 1600)
   {
-    positionCounter++;
-    if (positionCounter >= 4)
+    if (outerCounter >= 4)
     {
-      positionCounter = 0;
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
       {
+        // // X-axis position
+        // Xdes.x = 0;
+        // error.x = Xdes.x - X.x;
+        // Xdes.xdot = 1 * error.x;
+        // Xdes.xdot = Quadrotor::CONSTRAIN(Xdes.xdot, -2, 2);
+        //
+        // // Y-axis position
+        // Xdes.y = 0;
+        // error.y = Xdes.y - X.y;
+        // Xdes.ydot = 1 * error.y;
+        // Xdes.ydot = Quadrotor::CONSTRAIN(Xdes.ydot, -2, 2);
+
         // Z-axis position
-        Xdes.z = 0.6;
+        Xdes.z = 0.5;
         error.z = Xdes.z - X.z;
-        Xdes.zdot = 1.5 * error.z;
-        Xdes.zdot = Quadrotor::CONSTRAIN(Xdes.zdot, -4, 4);
+        Xdes.zdot = 2 * error.z;
+        if (X.z < 0.35)
+        {
+          Xdes.zdot = Quadrotor::CONSTRAIN(Xdes.zdot, -0.2, 0.2);
+        }
 
         Quadrotor::VelocityControl();
       }
       else
       {
+        Xdes.xdot = 0;
+        Xdes.ydot = 0;
         Xdes.zdot = 0;
         U1.current = 0;
       }
@@ -937,78 +896,240 @@ void Quadrotor::PositionControl(void)
 
 void Quadrotor::VelocityControl(void)
 {
-  if (channel.CH5 > 1900)
+  if (channel.CH5 > 1600)
   {
-    // Y-axis velocity
-    // error.ydot = Xdes.ydot - X.ydot;
+    // X-axis velocity
+    // float check1 = 0;
+    // float check2 = 0;
+    // error.xdot = (Xdes.xdot - X.xdot);
+    // error.xdot_integral += error.xdot;
+    // error.xdot_integral = Quadrotor::CONSTRAIN(error.xdot_integral, -70, 70);
+    // float Ux = 3 * error.xdot + 10 * dtOuter * error.xdot_integral + (0.1/dtOuter)*(error.xdot - error.xdot_prev1);
+    // float Ux_new = Quadrotor::CONSTRAIN(Ux, -30, 30);
+    // error.xdot_prev1 = error.xdot;
+    // // First Check
+    // if (Ux == Ux_new) // No wind-up
+    // {
+    //   check1 = 0;
+    // }
+    // else
+    // {
+    //   check1 = 1;
+    // }
+    // // Second Check
+    // if (Ux > 0 && error.xdot > 0)
+    // {
+    //   check2 = 1;
+    // }
+    // else if (Ux < 0 && error.xdot < 0)
+    // {
+    //   check2 = 1;
+    // }
+    // else
+    // {
+    //   check2 = 0;
+    // }
+    // // Finally
+    // if (check1 == 1 && check2 == 1)
+    // {
+    //   error.xdot_integral = 0;
+    // }
+    //
+    // // Y-axis velocity
+    // float check2_1 = 0;
+    // float check2_2 = 0;
+    // error.ydot = (Xdes.ydot - X.ydot);
     // error.ydot_integral += error.ydot;
     // error.ydot_integral = Quadrotor::CONSTRAIN(error.ydot_integral, -70, 70);
-    // Xdes.phi = (6.5 * error.ydot) + error.ydot_integral * 12.0 * dtOuter + (0.6/dtOuter)*(error.ydot - error.ydot_prev1);
-    // Xdes.phi = Quadrotor::CONSTRAIN(U1.current, -0.35, 0.35);
-    // U1.current = U1.current + 7.0;
-    // U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
-    // error.zdot_prev1 = error.zdot;
+    // float Uy = 3 * error.ydot + 10 * dtOuter * error.ydot_integral + (0.1/dtOuter)*(error.ydot - error.ydot_prev1);
+    // float Uy_new = Quadrotor::CONSTRAIN(Uy, -30, 30);
+    // error.ydot_prev1 = error.ydot;
+    //
+    // // First Check
+    // if (Uy == Uy_new) // No wind-up
+    // {
+    //   check2_1 = 0;
+    // }
+    // else
+    // {
+    //   check2_1 = 1;
+    // }
+    // // Second Check
+    // if (Uy > 0 && error.ydot > 0)
+    // {
+    //   check2_2 = 1;
+    // }
+    // else if (Uy < 0 && error.ydot < 0)
+    // {
+    //   check2_2 = 1;
+    // }
+    // else
+    // {
+    //   check2_2 = 0;
+    // }
+    // // Finally
+    // if (check2_1 == 1 && check2_2 == 1)
+    // {
+    //   error.ydot_integral = 0;
+    // }
+    //
+    // float sin_phi = (0.647/7.0) * (cos(X.psi) * Uy_new - sin(X.psi) * Ux_new);
+    // sin_phi = Quadrotor::CONSTRAIN(sin_phi, -1, 1);
+    // Xdes.phi = asin(sin_phi);
+    // Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
+    //
+    // float cos_phi = cos(Xdes.phi);
+    // float sin_theta = ((0.647/7.0)) * (-1*(cos(X.psi) * Ux_new + sin(X.psi) * Uy_new)) / cos_phi;
+    // sin_theta = Quadrotor::CONSTRAIN(sin_theta, -1, 1);
+    // Xdes.theta = asin(sin_theta);
+    // Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
+
+    // Shi Lu Code --------------------------------------------------------------
+    error.xdot = (Xdes.xdot - X.xdot) / 57.3;
+    float Ux = error.xdot * 6;
+    //Vy Control
+    error.ydot = (Xdes.ydot - X.ydot) / 57.3;
+    float Uy = error.ydot * 6;
+
+    float tmp_a, tmp_b, tmp_c1, tmp_c2, tmp_x1, tmp_x2;
+    tmp_a = cos(X.psi);
+    tmp_b = sin(X.psi);
+    tmp_c1 = Ux * 0.647 * (U1.current * 0.9);
+    tmp_c2 = Uy * 0.647 * (U1.current * 0.9);
+    //Target Phi
+    float sin_phi = tmp_a * tmp_c2 - tmp_b * tmp_c1;
+    sin_phi = Quadrotor::CONSTRAIN(sin_phi, -1, 1);
+    Xdes.phi = asin(sin_phi);
+    Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.26, 0.26);
+
+    //Target Theta
+    float cos_phi = cos(Xdes.phi);
+    float sin_theta = (-(tmp_a * tmp_c1 + tmp_b * tmp_c2))/cos_phi;
+    sin_theta = Quadrotor::CONSTRAIN(sin_theta, -1, 1);
+    Xdes.theta = asin(sin_theta);
+    Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.26, 0.26);
+    // Shi Lu Code --------------------------------------------------------------
 
     // Z-axis velocity
     error.zdot = Xdes.zdot - X.zdot;
     error.zdot_integral += error.zdot;
-    error.zdot_integral = Quadrotor::CONSTRAIN(error.zdot_integral, -70, 70);
-    U1.current = (6.5 * error.zdot) + error.zdot_integral * 12.0 * dtOuter + (0.6/dtOuter)*(error.zdot - error.zdot_prev1);
+    error.zdot_integral = Quadrotor::CONSTRAIN(error.zdot_integral, -70, 70); // To prevent integrator wind-up
+    U1.current = (8 * error.zdot) +  (2 * dtOuter) * error.zdot_integral + (0.8/dtOuter)*(error.zdot - error.zdot_prev1);
     U1.current = Quadrotor::CONSTRAIN(U1.current, -4, 4);
-    U1.current = U1.current + 7.0;
-    U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
+    U1.current = ((U1.current + 7.0)) / (cos(X.theta) * cos(X.phi)); // Source: Axel Reizenstein, "Position and Trajectory Control of a Quadcopter Using PID and LQ Controllers," Master's Thesis, Linköping University, 2017.
+    error.zdot_prev2 = error.zdot_prev1;
     error.zdot_prev1 = error.zdot;
+  }
+  else
+  {
+    error.zdot_prev2 = 0;
+    error.zdot_prev1 = 0;
+    error.xdot_integral = 0;
+    error.ydot_integral = 0;
   }
 }
 
+void Quadrotor::DifferentialFlatness(void)
+{
+  if (channel.CH5 > 1600)
+  {
+    if (outerCounter >= 4)
+    {
+      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
+      {
+        // States
+        Xdes.zdot = 0;
+        // Error
+        error.x = X.x - Xdes.x;
+        error.y = X.y - Xdes.y;
+        error.z = X.z - Xdes.z;
+        error.xdot = X.xdot - Xdes.xdot;
+        error.ydot = X.ydot - Xdes.ydot;
+        error.zdot = X.zdot - Xdes.zdot;
+        error.psi = X.psi - Xdes.psi;
+        // LQR
+        float g1 = 1, g2 = 5;
+        float u1, u2, u3, u4;
+        u1 = -g1 * error.x - g2 * error.xdot;
+        u2 = -g1 * error.y - g2 * error.ydot;
+        u3 = -g1 * error.z - g2 * error.zdot;
+        u4 = -g1 * error.psi;
+
+        // Feedforward
+        Xdes.zdotdot = 0;
+        Xdes.r = 0;
+        float up_1, up_2, up_3, up_psi;
+        up_1 = u1 + Xdes.xdotdot;
+        up_2 = u2 + Xdes.ydotdot;
+        up_3 = u3 + Xdes.xdotdot + 9.81;
+        up_psi = u4 + Xdes.r;
+
+        // Inverse Mapping
+        float z1, z2, z3;
+        U1.current = mass * sqrt(up_1*up_1 + up_2*up_2 + up_3*up_3);
+        U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
+        z1 = (mass/U1.current) * (up_1*cos(X.psi) + up_2*sin(X.psi));
+        z2 = (mass/U1.current) * (-up_1*sin(X.psi) + up_2*cos(X.psi));
+        z3 = (mass/U1.current) * up_3;
+        Xdes.phi = asin(z2);
+        Xdes.theta = atan(-z1/z3);
+        Xdes.r = up_psi*cos(Xdes.theta)*cos(Xdes.phi) + X.q*sin(Xdes.phi);
+
+        Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
+        Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
+        Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
+      }
+    }
+  }
+  else
+  {
+    Quadrotor::ThrottleControl();
+  }
+}
 
 // Generate Motor Commands
 // Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::GenerateMotorCommands(void)
 {
-  omega1Squared = (1/(4*k_f)) * U1.current + (1/(4*armlength*k_f)) * U2.current + (1/(4*armlength*k_f)) * U3.current - (1/(4*armlength*k_f)) * U4.current;
-  omega2Squared = (1/(4*k_f)) * U1.current - (1/(4*armlength*k_f)) * U2.current + (1/(4*armlength*k_f)) * U3.current + (1/(4*armlength*k_f)) * U4.current;
-  omega3Squared = (1/(4*k_f)) * U1.current - (1/(4*armlength*k_f)) * U2.current - (1/(4*armlength*k_f)) * U3.current - (1/(4*armlength*k_f)) * U4.current;
-  omega4Squared = (1/(4*k_f)) * U1.current + (1/(4*armlength*k_f)) * U2.current - (1/(4*armlength*k_f)) * U3.current + (1/(4*armlength*k_f)) * U4.current;
-  omega1Squared = Quadrotor::CONSTRAIN(omega1Squared, 0, 9000000);
-  omega2Squared = Quadrotor::CONSTRAIN(omega2Squared, 0, 9000000);
-  omega3Squared = Quadrotor::CONSTRAIN(omega3Squared, 0, 9000000);
-  omega4Squared = Quadrotor::CONSTRAIN(omega4Squared, 0, 9000000);
+  omega1Squared = 130958.617 * U1.current - 1290232.68 * U2.current + 1728826.63 * U3.current + 10113268.61 * U4.current;
+  omega2Squared = 130958.617 * U1.current + 1290232.68 * U2.current - 1728826.63 * U3.current + 10113268.61 * U4.current;
+  omega3Squared = 130958.617 * U1.current + 1290232.68 * U2.current + 1728826.63 * U3.current - 10113268.61 * U4.current;
+  omega4Squared = 130958.617 * U1.current - 1290232.68 * U2.current - 1728826.63 * U3.current - 10113268.61 * U4.current;
+  omega1Squared = Quadrotor::CONSTRAIN(omega1Squared, 0, 900000000);
+  omega2Squared = Quadrotor::CONSTRAIN(omega2Squared, 0, 900000000);
+  omega3Squared = Quadrotor::CONSTRAIN(omega3Squared, 0, 900000000);
+  omega4Squared = Quadrotor::CONSTRAIN(omega4Squared, 0, 900000000);
   omega1 = sqrt(omega1Squared);
   omega2 = sqrt(omega2Squared);
   omega3 = sqrt(omega3Squared);
   omega4 = sqrt(omega4Squared);
 
   // Motor Model
-  if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
+  if (QuadrotorState == ARMING_MODE)
   {
-    float param_a = 888.7, param_b = 3899, param_c = 1120000, param_d = 4718, param_e = 932.6;
+    float param_a = 1166.0, param_b = 5393, param_c = 299600, param_d = 1544, param_e = 894.5;
     PWM1 = (omega1 * omega1 + param_b * omega1 + param_c) / (param_a * voltage + param_d) + param_e;
     PWM2 = (omega2 * omega2 + param_b * omega2 + param_c) / (param_a * voltage + param_d) + param_e;
     PWM3 = (omega3 * omega3 + param_b * omega3 + param_c) / (param_a * voltage + param_d) + param_e;
     PWM4 = (omega4 * omega4 + param_b * omega4 + param_c) / (param_a * voltage + param_d) + param_e;
-    PWM1 = Quadrotor::CONSTRAIN(PWM1, 1100, 1600);
-    PWM2 = Quadrotor::CONSTRAIN(PWM2, 1100, 1600);
-    PWM3 = Quadrotor::CONSTRAIN(PWM3, 1100, 1600);
-    PWM4 = Quadrotor::CONSTRAIN(PWM4, 1100, 1600);
-    volt1 = (PWM1 - 1000)/1000 * voltage;
-    volt2 = (PWM2 - 1000)/1000 * voltage;
-    volt3 = (PWM3 - 1000)/1000 * voltage;
-    volt4 = (PWM4 - 1000)/1000 * voltage;
+    PWM1 = Quadrotor::CONSTRAIN(PWM1, MIN_MOTOR_LEVEL, MAX_MOTOR_LEVEL);
+    PWM2 = Quadrotor::CONSTRAIN(PWM2, MIN_MOTOR_LEVEL, MAX_MOTOR_LEVEL);
+    PWM3 = Quadrotor::CONSTRAIN(PWM3, MIN_MOTOR_LEVEL, MAX_MOTOR_LEVEL);
+    PWM4 = Quadrotor::CONSTRAIN(PWM4, MIN_MOTOR_LEVEL, MAX_MOTOR_LEVEL);
   }
-  if (QuadrotorState != ARMING_MODE || channel.CH3 < 1100)
+  if (QuadrotorState != ARMING_MODE)
   {
-    PWM1 = 1000;
-    PWM2 = 1000;
-    PWM3 = 1000;
-    PWM4 = 1000;
+    PWM1 = OFF_MOTOR_LEVEL;
+    PWM2 = OFF_MOTOR_LEVEL;
+    PWM3 = OFF_MOTOR_LEVEL;
+    PWM4 = OFF_MOTOR_LEVEL;
   }
-  if (QuadrotorState == DISARMING_MODE)
+  if (QuadrotorState == DISARMING_MODE || channel.CH6 > 1000)
   {
-    PWM1 = 0;
-    PWM2 = 0;
-    PWM3 = 0;
-    PWM4 = 0;
+    PWM1 = OFF_MOTOR_LEVEL;
+    PWM2 = OFF_MOTOR_LEVEL;
+    PWM3 = OFF_MOTOR_LEVEL;
+    PWM4 = OFF_MOTOR_LEVEL;
   }
 
   Quadrotor::MotorRun();
@@ -1017,28 +1138,14 @@ void Quadrotor::GenerateMotorCommands(void)
 // Run Motors
 void Quadrotor::MotorRun(void)
 {
-  if (QuadrotorState == ARMING_MODE && channel.CH3 > 1100)
-  {
-    float input1 = PWM_FACTOR * PWM1;
-    float input2 = PWM_FACTOR * PWM2;
-    float input3 = PWM_FACTOR * PWM3;
-    float input4 = PWM_FACTOR * PWM4;
-    analogWrite(MOTOR1, input1);
-    analogWrite(MOTOR2, input2);
-    analogWrite(MOTOR3, input3);
-    analogWrite(MOTOR4, input4);
-  }
-  else
-  {
-    float input1 = PWM_FACTOR * 1000;
-    float input2 = PWM_FACTOR * 1000;
-    float input3 = PWM_FACTOR * 1000;
-    float input4 = PWM_FACTOR * 1000;
-    analogWrite(MOTOR1, input1);
-    analogWrite(MOTOR2, input2);
-    analogWrite(MOTOR3, input3);
-    analogWrite(MOTOR4, input4);
-  }
+  float input1 = PWM_FACTOR * PWM1;
+  float input2 = PWM_FACTOR * PWM2;
+  float input3 = PWM_FACTOR * PWM3;
+  float input4 = PWM_FACTOR * PWM4;
+  analogWrite(MOTOR1, input1);
+  analogWrite(MOTOR2, input2);
+  analogWrite(MOTOR3, input3);
+  analogWrite(MOTOR4, input4);
 }
 
 // XbeeZigbee Send Data Wirelessly
@@ -1051,21 +1158,24 @@ void Quadrotor::XbeeZigbeeSend(void)
     switch (Xbee_command)
     {
       case 1279:
-        Serial1.print(U1.current); Serial1.print('\t');
-        Serial1.println();
-        break;
-      case 1280:
         Serial1.print(voltage); Serial1.print('\t');
         Serial1.println();
         break;
+      case 1280:
+      Serial1.print(X.x); Serial1.print('\t');
+      Serial1.print(X.y); Serial1.print('\t');
+      Serial1.print(X.z); Serial1.print('\t');
+      Serial1.println();
+        break;
       case 1281:
-        Serial1.print(Xdes.psi * 180 / PI); Serial1.print('\t');
-        Serial1.print(X.psi * 180 / PI); Serial1.print('\t');
+        Serial1.print(Xdes.ydot); Serial1.print('\t');
+        Serial1.print(X.ydot); Serial1.print('\t');
         Serial1.println();
         break;
       case 1282:
-        Serial1.print(Xdes.zdot); Serial1.print('\t');
-        Serial1.println();
+      Serial1.print(Xdes.theta * 180 / PI); Serial1.print('\t');
+      Serial1.print(X.x); Serial1.print('\t');
+      Serial1.println();
         break;
       case 1290:
         Serial1.print(X.x); Serial1.print('\t');
@@ -1148,4 +1258,15 @@ float Quadrotor::invSqrt(float number) {
   y  = * ( float * ) &i;
   y  = y * ( threehalfs - ( x2 * y * y ) );
   return y;
+}
+
+void Quadrotor::LoopCounter(void)
+{
+  if (outerCounter >= 4)
+  {
+    outerCounter = 0;
+  }
+  while (micros() - loop_timer < dtMicroseconds);
+  // Reset the zero timer
+  loop_timer = micros();
 }
