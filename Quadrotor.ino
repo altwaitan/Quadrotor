@@ -2,6 +2,7 @@
 // Description: Teensy 3.2 code
 #include "BaseStation.h"
 
+
 Quadrotor Quad;
 BaseStation Vive;
 SBUS Radiolink(Serial2);
@@ -21,6 +22,7 @@ void setup()
 
 void loop()
 {
+
   // outerCounter for 100Hz
   Quad.outerCounter++;
   Receiver();
@@ -75,13 +77,6 @@ void Receiver()
 
 void serialEvent1()
 {
-  if (Quad.Xbee_couter == 2)
-  {
-    Vive.HTCVive(&Quad);
-  }
-  Quad.Xbee_couter++;
-  if (Quad.Xbee_couter >= 4)
-  {
-    Quad.Xbee_couter = 0;
-  }
+  // Vive.HTCVive(&Quad, SerialMAV);
+  // Vive.HTCViveComplementaryFilter(&Quad);
 }

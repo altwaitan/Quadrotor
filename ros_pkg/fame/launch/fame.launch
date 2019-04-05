@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="fame" type="fame_serial" name="fame_serial" />
+  <node pkg="fame" type="fame_filter" name="fame_filter" />
+</launch>

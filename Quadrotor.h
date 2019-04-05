@@ -9,6 +9,8 @@
 #include "Quaternion.h"
 #include "IMU.h"
 #include <cmath>
+#include <SoftwareSerial.h>
+
 
 // Teensy 3.2 pins
 #define MOTOR1 20

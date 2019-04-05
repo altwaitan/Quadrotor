@@ -5,40 +5,88 @@
 // Source: Shi Lu, "Modeling, Control and Design of a Quadrotor Platform for Indoor Environments," 2018.
 void BaseStation::HTCVive(Quadrotor *quadrotor)
 {
-  if (quadrotor->channel.CH5 > 1600 && quadrotor->channel.CH5 < 1700)
-  {
-    String data = "";
-    while (Serial1.available() > 0)
-    {
-      data += char(Serial1.read());
-    }
-    quadrotor->Xbee_length = data.length();
+    // RECEVING a HEARTBEAT ----------------------------------------
+    // mavlink_message_t msg;
+    // mavlink_status_t status;
+    //
+    // while (Serial1.available())
+    // {
+    //   uint8_t c = Serial1.read();
+    //   if (mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status))
+    //   {
+    //     Serial.print("DEBUG msgid:");
+    //     Serial.println(msg.msgid);
+    //     switch (msg.msgid)
+    //     {
+    //       case MAVLINK_MSG_ID_HEARTBEAT:
+    //         mavlink_heartbeat_t hb;
+    //         mavlink_msg_heartbeat_decode(&msg, &hb);
+    //         Serial.print(millis());
+    //         Serial.print("\ncustom_mode: "); Serial.println(hb.custom_mode);
+    //         Serial.print("Type: "); Serial.println(hb.type);
+    //         Serial.print("autopilot: "); Serial.println(hb.autopilot);
+    //         Serial.print("mavlink_version: "); Serial.println(hb.mavlink_version);
+    //         Serial.println();
+    //       break;
+    //     }
+    //   }
+    // }
+    // -------------------------------------------------------------
+    // mavlink_message_t mav_msg;
+    // uint8_t len;
+    // uint8_t buf[MAVLINK_MAX_PACKET_LEN];
+    // uint32_t time_mav = millis();
+    // mavlink_msg_attitude_pack(1, 1, &mav_msg, time_mav, quadrotor->X.phi, quadrotor->X.theta, quadrotor->X.psi, quadrotor->X.p, quadrotor->X.q, quadrotor->X.r);
+    // len = mavlink_msg_to_send_buffer(buf, &mav_msg);
+    // Serial1.write(buf, len);
 
-    for (int i = 0; i < quadrotor->Xbee_length; i++)
-    {
-      quadrotor->Xbee_data[100 + i] = data[i];
-    }
+    mavlink_message_t mav_msg;
+    uint8_t len;
+    uint8_t buf[MAVLINK_MAX_PACKET_LEN];
+    uint32_t time_mav = micros();
+    mavlink_msg_raw_imu_pack(1, 1, &mav_msg, time_mav,
+      quadrotor->accel.filtered.x, quadrotor->accel.filtered.y, quadrotor->accel.filtered.z,
+      quadrotor->X.p, quadrotor->X.q, quadrotor->X.r, 0.0, 0.0, 0.0);
+    len = mavlink_msg_to_send_buffer(buf, &mav_msg);
+    Serial1.write(buf, len);
 
-    if (quadrotor->Xbee_length == 4)
+    mavlink_message_t msg;
+    mavlink_status_t status;
+
+    while (Serial1.available())
     {
-      short temp = 0;
-      for (uint8_t i = 0; i < 4; i++)
+      uint8_t c = Serial1.read();
+      if (mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status))
       {
-        temp = temp * 10 + (quadrotor->Xbee_data[i] - '0');
+        switch (msg.msgid)
+        {
+          case MAVLINK_MSG_ID_HEARTBEAT:
+            mavlink_heartbeat_t hb;
+            mavlink_msg_heartbeat_decode(&msg, &hb);
+            Serial.print(millis());
+            Serial.print("\ncustom_mode: "); Serial.println(hb.custom_mode);
+            Serial.print("Type: "); Serial.println(hb.type);
+            Serial.print("autopilot: "); Serial.println(hb.autopilot);
+            Serial.print("mavlink_version: "); Serial.println(hb.mavlink_version);
+            Serial.println();
+            break;
+          case MAVLINK_MSG_ID_ROLL_PITCH_YAW_SPEED_THRUST_SETPOINT:
+            mavlink_roll_pitch_yaw_speed_thrust_setpoint_t des;
+            mavlink_msg_roll_pitch_yaw_speed_thrust_setpoint_decode(&msg, &des);
+            quadrotor->U1.current = des.thrust;
+            quadrotor->Xdes.phi = des.roll_speed; // We are sending roll angle (rad) NOT body_roll_rate
+            quadrotor->Xdes.theta = des.pitch_speed; // We are sending pitch angle (rad) NOT body_pitch_rate
+            quadrotor->Xdes.r = des.yaw_speed;
+            Serial.print(quadrotor->U1.current);
+            Serial.print(", ");
+            Serial.print(quadrotor->Xdes.phi);
+            Serial.print(", ");
+            Serial.print(quadrotor->Xdes.theta);
+            Serial.print(", ");
+            Serial.println(quadrotor->Xdes.r);
+        }
       }
-      if (temp >= 1000 && temp <= 5000)
-        quadrotor->Xbee_command = temp;
     }
-    else if (quadrotor->Xbee_length > 5 && quadrotor->Xbee_length < 12 && (quadrotor->Xbee_data[100 + 0] == '&' && quadrotor->Xbee_data[100 + 5] == '_' && quadrotor->Xbee_data[100 + quadrotor->Xbee_length - 1] == '*'))
-    {
-      // Ignore
-    }
-    else if (quadrotor->Xbee_length >= 20)
-    {
-      BaseStation::HTCViveProcess(quadrotor);
-      BaseStation::HTCViveMovingAverage(quadrotor);
-    }
-  }
 }
 
 // Process the received data and assign them to each Quadrotor state variable.
@@ -46,7 +94,7 @@ void BaseStation::HTCVive(Quadrotor *quadrotor)
 
 void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
 {
-  for (int16_t i = 100 + 3; i < 100 + quadrotor->Xbee_length - 5; i++)
+  for (int16_t i = 100 + 3; i < 100 + quadrotor->Xbee_length - 2; i++)
   {
     switch (quadrotor->Xbee_data[i])
     {
@@ -63,273 +111,8 @@ void BaseStation::HTCViveProcess(Quadrotor *quadrotor)
           }
         }
         break;
-      case 22:
-        if (quadrotor->Xbee_data[i + 1] == 102)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 21 && quadrotor->Xbee_data[i - 5] == 101) && (quadrotor->Xbee_data[i + 6] == 23 && quadrotor->Xbee_data[i + 7] == 103))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->X.y = *(float *) ptr;
-          }
-        }
-        break;
-      case 23:
-        if (quadrotor->Xbee_data[i + 1] == 103)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 22 && quadrotor->Xbee_data[i - 5] == 102) && (quadrotor->Xbee_data[i + 6] == 24 && quadrotor->Xbee_data[i + 7] == 104))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->X.z = *(float *) ptr;
-          }
-        }
-        break;
-      case 24:
-        if (quadrotor->Xbee_data[i + 1] == 104)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 23 && quadrotor->Xbee_data[i - 5] == 103) && (quadrotor->Xbee_data[i + 6] == 25 && quadrotor->Xbee_data[i + 7] == 105))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->X.xdot = *(float *) ptr;
-          }
-        }
-        break;
-      case 25:
-        if (quadrotor->Xbee_data[i + 1] == 105)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 24 && quadrotor->Xbee_data[i - 5] == 104) && (quadrotor->Xbee_data[i + 6] == 26 && quadrotor->Xbee_data[i + 7] == 106))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->X.ydot = *(float *) ptr;
-          }
-        }
-        break;
-      case 26:
-        if (quadrotor->Xbee_data[i + 1] == 106)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 25 && quadrotor->Xbee_data[i - 5] == 105) && (quadrotor->Xbee_data[i + 6] == 27 && quadrotor->Xbee_data[i + 7] == 107))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->X.zdot = *(float *) ptr;
-          }
-        }
-        break;
-      case 27:
-        if (quadrotor->Xbee_data[i + 1] == 107)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 26 && quadrotor->Xbee_data[i - 5] == 106) && (quadrotor->Xbee_data[i + 6] == 28 && quadrotor->Xbee_data[i + 7] == 108))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            HTCViveState.psi = *(float *) ptr;
-          }
-        }
-        break;
-      case 28:
-        if (quadrotor->Xbee_data[i + 1] == 108)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 27 && quadrotor->Xbee_data[i - 5] == 107) && (quadrotor->Xbee_data[i + 6] == 29 && quadrotor->Xbee_data[i + 7] == 109))
-          {
-            // Pitch
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            HTCViveState.theta = *(float *) ptr;
-          }
-        }
-        break;
-      case 29:
-        if (quadrotor->Xbee_data[i + 1] == 109)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 28 && quadrotor->Xbee_data[i - 5] == 108) && (quadrotor->Xbee_data[i + 6] == 30 && quadrotor->Xbee_data[i + 7] == 110))
-          {
-            // Roll
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            HTCViveState.phi = *(float *) ptr;
-          }
-        }
-        break;
-      case 31:
-        if (quadrotor->Xbee_data[i + 1] == 111)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 29 && quadrotor->Xbee_data[i - 5] == 109) && (quadrotor->Xbee_data[i + 6] == 32 && quadrotor->Xbee_data[i + 7] == 112))
-          {
-            // q0
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.xdot = *(float *) ptr;
-          }
-        }
-        break;
-      case 32:
-        if (quadrotor->Xbee_data[i + 1] == 112)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 31 && quadrotor->Xbee_data[i - 5] == 111) && (quadrotor->Xbee_data[i + 6] == 33 && quadrotor->Xbee_data[i + 7] == 113))
-          {
-            // q1
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.ydot = *(float *) ptr;
-          }
-        }
-        break;
-      case 33:
-        if (quadrotor->Xbee_data[i + 1] == 113)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 32 && quadrotor->Xbee_data[i - 5] == 112) && (quadrotor->Xbee_data[i + 6] == 34 && quadrotor->Xbee_data[i + 7] == 114))
-          {
-            // q2
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.xdotdot = *(float *) ptr;
-          }
-        }
-        break;
-      case 34:
-        if (quadrotor->Xbee_data[i + 1] == 114)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 33 && quadrotor->Xbee_data[i - 5] == 113) && (quadrotor->Xbee_data[i + 6] == 35 && quadrotor->Xbee_data[i + 7] == 115))
-          {
-            // q3
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.ydotdot = *(float *) ptr;
-          }
-        }
-        break;
-      case 35:
-        if (quadrotor->Xbee_data[i + 1] == 115)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 34 && quadrotor->Xbee_data[i - 5] == 114) && (quadrotor->Xbee_data[i + 6] == 36 && quadrotor->Xbee_data[i + 7] == 116))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.x = *(float *) ptr;
-          }
-        }
-        break;
-      case 36:
-        if (quadrotor->Xbee_data[i + 1] == 116)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 35 && quadrotor->Xbee_data[i - 5] == 115) && (quadrotor->Xbee_data[i + 6] == 37 && quadrotor->Xbee_data[i + 7] == 117))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.y = *(float *) ptr;
-          }
-        }
-        break;
-      case 37:
-        if (quadrotor->Xbee_data[i + 1] == 117)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 36 && quadrotor->Xbee_data[i - 5] == 116) && (quadrotor->Xbee_data[i + 6] == 38 && quadrotor->Xbee_data[i + 7] == 118))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.z = *(float *) ptr;
-          }
-        }
-        break;
-      case 38:
-        if (quadrotor->Xbee_data[i + 1] == 118)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 37 && quadrotor->Xbee_data[i - 5] == 117) && (quadrotor->Xbee_data[i + 6] == 30 && quadrotor->Xbee_data[i + 7] == 110))
-          {
-            unsigned long temp;
-            void* ptr;
-            temp = (quadrotor->Xbee_data[i + 5] << 24) | (quadrotor->Xbee_data[i + 4] << 16) | (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            ptr = &temp;
-            quadrotor->Xdes.psi = *(float *) ptr;
-            quadrotor->Xdes.psi = quadrotor->Xdes.psi;
-          }
-        }
-        break;
-      case 30:
-        if (quadrotor->Xbee_data[i + 1] == 110)
-        {
-          if ((quadrotor->Xbee_data[i - 6] == 38 && quadrotor->Xbee_data[i - 5] == 118) && (quadrotor->Xbee_data[i + 4] == 50 && quadrotor->Xbee_data[i + 5] == 75 && quadrotor->Xbee_data[i + 6] == 100))
-          {
-            short command_temp;
-            command_temp = (quadrotor->Xbee_data[i + 3] << 8) | quadrotor->Xbee_data[i + 2];
-            if (command_temp >= 1000 && command_temp <= 4000)
-              quadrotor->Xbee_command = command_temp;
-          }
-        }
-        break;
     }
   }
-  // Phi
-  if (abs((quadrotor->X.phi * (180/PI)) - HTCViveState.phi) < 5.0)
-  {
-      HTCViveState.phi = (quadrotor->X.phi * (180/PI)) * 0.75 + HTCViveState.phi * 0.25;
-  }
-  else
-  {
-      HTCViveState.phi = (quadrotor->X.phi * (180/PI)) * 0.99 + HTCViveState.phi * 0.01;
-  }
-  HTCViveState.phi = HTCViveState.phi * (PI/180);
-  // Theta
-  if (abs((quadrotor->X.theta * (180/PI)) - HTCViveState.theta) < 5.0)
-  {
-      HTCViveState.theta = (quadrotor->X.theta * (180/PI)) * 0.75 + HTCViveState.theta * 0.25;
-  }
-  else
-  {
-      HTCViveState.theta = (quadrotor->X.theta * (180/PI)) * 0.99 + HTCViveState.theta * 0.01;
-  }
-  HTCViveState.theta = HTCViveState.theta * (PI/180);
-
-
-  float phi_sin = sin(HTCViveState.phi);
-  float theta_sin = sin(HTCViveState.theta);
-  float phi_cos = cos(HTCViveState.phi);
-  float theta_cos = cos(HTCViveState.theta);
-  float pre_cos , pre_sin, ob_cos, ob_sin, inc, cof = 0.70;
-  inc = (-phi_sin / theta_cos * (quadrotor->X.q * (180/PI)) + phi_cos / theta_cos * (quadrotor->X.r * (180/PI))) * dtOuter;
-  pre_cos = cos(((quadrotor->X.psi * (180/PI)) + inc) * (PI/180));
-  pre_sin = sin(((quadrotor->X.psi * (180/PI)) + inc) * (PI/180));
-
-  ob_cos = cos((HTCViveState.psi) * (PI/180));
-  ob_sin = sin((HTCViveState.psi) * (PI/180));
-
-  pre_cos = pre_cos * cof + ob_cos * (1 - cof);
-  pre_sin = pre_sin * cof + ob_sin * (1 - cof);
-
-  quadrotor->X.psi = atan2(pre_sin , pre_cos);
 }
 
 // Moving Average to smooth the received data
