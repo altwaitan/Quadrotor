@@ -20,7 +20,7 @@ public:
 
   fame_serial()
   {
-    sub = n.subscribe<fame::fame_msg>("/fame_command", 1000, &fame_serial::callback, this);
+    sub = n.subscribe<fame::fame_msg>("/fame_cmd", 1000, &fame_serial::callback, this);
     pub = n.advertise<sensor_msgs::Imu>("fame_serial_imu", 1000);
   }
 

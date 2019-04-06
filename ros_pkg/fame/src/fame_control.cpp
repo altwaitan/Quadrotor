@@ -137,8 +137,13 @@ int main(int argc, char **argv)
 
   ros::Rate loop_rate(100);
 
+  while (ros::ok())
+  {
+    fame.LQR();
+    ros::spinOnce();
+    loop_rate.sleep();
+  }
 
-  ros::spin();
   ros::shutdown();
   return 0;
 }

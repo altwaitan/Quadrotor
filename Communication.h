@@ -13,9 +13,6 @@ public:
     float thrust, phi, theta, r;
   };
   _CommunicationState CommunicationState;
-  float moving_average[13][5];
-  float sum_average[13];
-  int Counter = 0;
 
   // Methods
   void ROS_Send(Quadrotor *quadrotor);

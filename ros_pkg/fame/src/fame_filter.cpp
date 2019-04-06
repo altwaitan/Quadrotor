@@ -31,7 +31,7 @@ public:
   fame_filter()
   {
     sub = n.subscribe<sensor_msgs::Imu>("/fame_serial_imu", 1000, &fame_filter::callback, this);
-    sub2 = n.subscribe<nav_msgs::Odometry>("/vive/LHR_D254C151_odom", 1000, &fame_filter::callback2, this);
+    sub2 = n.subscribe<nav_msgs::Odometry>("/vive/LHR_FC64C5CA_odom", 1000, &fame_filter::callback2, this);
     pub = n.advertise<fame::fame_state>("fame_filter_state", 1000);
   }
 
@@ -89,9 +89,22 @@ public:
       }
     }
 
-    moving_average[0][0] = -(msg->pose.pose.position.x);
-    moving_average[1][0] = -(msg->pose.pose.position.z);
-    moving_average[2][0] = msg->pose.pose.position.y;
+    if (initial == 0)
+    {
+      x_offset = -(msg->pose.pose.position.x);
+      y_offset = -(msg->pose.pose.position.z);
+      z_offset = msg->pose.pose.position.y;
+      initial = initial + 1;
+    }
+
+    // Shift axes
+    x = -(msg->pose.pose.position.x) - x_offset;
+    y = -(msg->pose.pose.position.z) - y_offset;
+    z = msg->pose.pose.position.y - z_offset;
+
+    moving_average[0][0] = x;
+    moving_average[1][0] = y;
+    moving_average[2][0] = z;
     moving_average[3][0] = -(msg->twist.twist.linear.x);
     moving_average[4][0] = -(msg->twist.twist.linear.z);
     moving_average[5][0] = msg->twist.twist.linear.y;
@@ -158,19 +171,9 @@ public:
     state.velocity.linear.y = (state.velocity.linear.y + dtOuter * state.acceleration.linear.y) * CF_a + vy * (1 - CF_a);
     state.velocity.linear.z = (state.velocity.linear.z + dtOuter * state.acceleration.linear.z) * CF_a + vz * (1 - CF_a);
 
-    if (initial > 0 && initial < 10)
-    {
-      x_offset = state.pose.position.x;
-      y_offset = state.pose.position.y;
-      z_offset = state.pose.position.z;
-      initial = initial + 1;
-    }
     state.pose.position.x = (state.pose.position.x + dtOuter * state.velocity.linear.x + 0.5 * dtOuter_2 * state.acceleration.linear.x) * CF_a + x * (1 - CF_a);
     state.pose.position.y = (state.pose.position.y + dtOuter * state.velocity.linear.y + 0.5 * dtOuter_2 * state.acceleration.linear.y) * CF_a + y * (1 - CF_a);
     state.pose.position.z = (state.pose.position.z + dtOuter * state.velocity.linear.z + 0.5 * dtOuter_2 * state.acceleration.linear.z) * CF_a + z * (1 - CF_a);
-    state.pose.position.x = state.pose.position.x - x_offset;
-    state.pose.position.y = state.pose.position.y - y_offset;
-    state.pose.position.z = state.pose.position.z - z_offset;
     pub.publish(state);
 
   }
