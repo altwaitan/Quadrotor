@@ -14,6 +14,7 @@
 #include "mavlink/mavlink.h"
 
 float x, y, z, vx, vy, vz, qw, qx, qy, qz;
+float vx_prev, vy_prev, vz_prev;
 float x_offset, y_offset, z_offset;
 float sum_average[13];
 float moving_average[13][5];
@@ -132,39 +133,12 @@ public:
     qy = sum_average[11];
     qz = sum_average[12];
 
-    // Complementary Filter
-    float norm = invSqrt(qw * qw + qx * qx + qy * qy + qz * qz);
-    qw *= norm;
-    qx *= norm;
-    qy *= norm;
-    qz *= norm;
-
-    Eigen::MatrixXf HTCVive_R(3, 3);
-    Eigen::MatrixXf Acc_B(3, 1);
-    Eigen::MatrixXf Acc_I(3, 1);
-
-    float q0_2, q1_2, q2_2, q3_2, q1q2, q0q3, q1q3, q0q2, q2q3, q0q1;
-    q0_2 = qw * qw;
-    q1_2 = qx * qx;
-    q2_2 = qy * qy;
-    q3_2 = qz * qz;
-    q1q2 = qx * qy;
-    q0q3 = qw * qz;
-    q1q3 = qx * qz;
-    q0q2 = qw * qy;
-    q2q3 = qy * qz;
-    q0q1 = qw * qx;
-
-    HTCVive_R << q0_2 + q1_2 - q2_2 - q3_2, 2 * (q1q2 - q0q3),  2 * (q1q3 + q0q2),
-           2 * (q1q2 + q0q3),  q0_2 - q1_2 + q2_2 - q3_2,  2 * (q2q3 - q0q1),
-           2 * (q1q3 - q0q2),  2 * (q2q3 + q0q1), q0_2 - q1_2 - q2_2 + q3_2;
-
-    Acc_B << imu.linear_acceleration.x / 8192.0 * 9.8 , imu.linear_acceleration.y / 8192.0 * 9.8 , imu.linear_acceleration.z / 8192.0 * 9.8;
-    Acc_I =  HTCVive_R * Acc_B;
-
-    state.acceleration.linear.x = Acc_I(0, 0);
-    state.acceleration.linear.y = -Acc_I(1, 0);
-    state.acceleration.linear.z = Acc_I(2, 0) - 9.8;
+    state.acceleration.linear.x = (vx - vx_prev) / (0.01);
+    state.acceleration.linear.y = (vy - vy_prev) / (0.01);
+    state.acceleration.linear.z = (vz - vz_prev) / (0.01);
+    vx_prev = vx;
+    vy_prev = vy;
+    vz_prev = vz;
 
     float CF_a = 0.8, dtOuter = 0.01, dtOuter_2 = dtOuter * dtOuter;
     state.velocity.linear.x = (state.velocity.linear.x + dtOuter * state.acceleration.linear.x) * CF_a + vx * (1 - CF_a);
