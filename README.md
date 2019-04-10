@@ -1,4 +1,4 @@
-# Quadrotor (NOT TESTED VERSION)
+# Quadrotor (Tested)
 This research is part of a long-term goal of a fleet of cooperating Flexible Autonomous Machines operating in an uncertain Environment (FAME) at Arizona State University.
 
 ## Summary

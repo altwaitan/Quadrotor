@@ -145,6 +145,10 @@ add_executable(fame_control src/fame_control)
 target_link_libraries(fame_control ${catkin_LIBRARIES})
 add_dependencies(fame_control fame_generate_message_cpp)
 
+add_executable(fame_log src/fame_log)
+target_link_libraries(fame_log ${catkin_LIBRARIES})
+add_dependencies(fame_log fame_generate_message_cpp)
+
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries

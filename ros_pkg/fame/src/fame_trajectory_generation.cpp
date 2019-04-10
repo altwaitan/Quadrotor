@@ -53,12 +53,12 @@ public:
       }
       else if (mode == 2)
       {
-        state.pose.position.x = 0.5 * sin(k * 0.6);
-        state.pose.position.y = 0.5 * cos(k * 0.6);
-        state.velocity.linear.x = 0.5 * (0.6) * cos(k * 0.6);
-        state.velocity.linear.y = -0.5 * (0.6) * sin(k * 0.6);
-        state.acceleration.linear.x = -0.5 * (0.6*0.6) * sin(k * 0.6);
-        state.acceleration.linear.y = -0.5 * (0.6*0.6) * cos(k * 0.6);
+        state.pose.position.x = 0.5 * sin(k * 0.8);
+        state.pose.position.y = 0;
+        state.velocity.linear.x = 0.5 * (0.8) * cos(k * 0.8);
+        state.velocity.linear.y = 0;
+        state.acceleration.linear.x = -0.5 * (0.8*0.8) * sin(k * 0.8);
+        state.acceleration.linear.y = 0;
         state.pose.position.z = 1;
         state.velocity.linear.z = 0;
         state.acceleration.linear.z = 0;

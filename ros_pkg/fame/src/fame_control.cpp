@@ -76,7 +76,7 @@ public:
     float error_vz = state.velocity.linear.z - desired.velocity.linear.z;
     float error_psi = state.attitude.z - desired.attitude.z;
 
-    float g1 = 1, g2 = 5;
+    float g1 = 3.1623, g2 = 4.0404;
     float u1, u2, u3, u4;
     u1 = -g1 * error_x - g2 * error_vx;
     u2 = -g1 * error_y - g2 * error_vy;

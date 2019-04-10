@@ -3,4 +3,5 @@
   <node pkg="fame" type="fame_filter" name="fame_filter" />
   <node pkg="fame" type="fame_trajectory_generation" name="fame_trajectory_generation" />
   <node pkg="fame" type="fame_control" name="fame_control" />
+<node pkg="fame" type="fame_log" name="fame_log" />
 </launch>
