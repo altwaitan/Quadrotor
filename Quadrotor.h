@@ -158,9 +158,11 @@ public:
   unsigned long loop_timer;
   uint8_t blink = 0;
   uint8_t blinkCounter = 0;
+  int flight_mode = 0;
 
   // Control variables
   _CONTROLS U1, U2, U3, U4; // Inner loop
+  _CONTROLS U1des;
   _W Wp, Wq, Wr, Wxdot, Wydot, Wzdot; // Prefilter
   uint8_t outerCounter = 0;
   int8_t control_method = 0;

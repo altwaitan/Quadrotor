@@ -37,7 +37,7 @@ public:
     uint8_t buf2[MAVLINK_MAX_PACKET_LEN];
     ros::Time begin = ros::Time::now();
     mavlink_msg_roll_pitch_yaw_speed_thrust_setpoint_pack(255, 1, &mav_msg2,
-    						       0.0, msg->phi_des, msg->theta_des, msg->r_des, msg->thrust_des);
+    						       msg->mode, msg->phi_des, msg->theta_des, msg->r_des, msg->thrust_des);
     len = mavlink_msg_to_send_buffer(buf2, &mav_msg2);
     ser.write(buf2, len);
   }

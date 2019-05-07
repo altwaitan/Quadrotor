@@ -41,26 +41,21 @@ void Communication::ROS_Receive(Quadrotor *quadrotor)
           CommunicationState.phi = des.roll_speed; // We are sending roll angle (rad) NOT body_roll_rate
           CommunicationState.theta = des.pitch_speed; // We are sending pitch angle (rad) NOT body_pitch_rate
           CommunicationState.r = des.yaw_speed;
+          CommunicationState.mode = des.time_boot_ms;
 
-          Serial.print(CommunicationState.thrust);
-          Serial.print(", ");
-          Serial.print(CommunicationState.phi);
-          Serial.print(", ");
-          Serial.print(CommunicationState.theta);
-          Serial.print(", ");
-          Serial.println(CommunicationState.r);
-
-          if (quadrotor->channel.CH5 > 1600 && quadrotor->channel.CH5 < 1700)
+          if (quadrotor->channel.CH5 > 1600)
           {
-            quadrotor->U1.current = CommunicationState.thrust;
+            quadrotor->U1des.current = CommunicationState.thrust;
             quadrotor->Xdes.phi = CommunicationState.phi;
             quadrotor->Xdes.theta = CommunicationState.theta;
             quadrotor->Xdes.r = CommunicationState.r;
+            quadrotor->flight_mode = CommunicationState.mode;
 
-            quadrotor->U1.current = quadrotor->CONSTRAIN(quadrotor->U1.current, 0, 15);
+            quadrotor->U1des.current = quadrotor->CONSTRAIN(quadrotor->U1des.current, 0, 15);
             quadrotor->Xdes.phi = quadrotor->CONSTRAIN(quadrotor->Xdes.phi, -0.35, 0.35);
             quadrotor->Xdes.theta = quadrotor->CONSTRAIN(quadrotor->Xdes.theta, -0.35, 0.35);
-            quadrotor->Xdes.r = quadrotor->CONSTRAIN(quadrotor->Xdes.r, -0.1, 0.1);
+            quadrotor->Xdes.r = quadrotor->CONSTRAIN(quadrotor->Xdes.r, -1, 1);
+
           }
       }
     }

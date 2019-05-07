@@ -11,6 +11,7 @@ public:
   // Variables
   struct _CommunicationState {
     float thrust, phi, theta, r;
+    int mode; 
   };
   _CommunicationState CommunicationState;
 

@@ -3,7 +3,7 @@
 // Motor initialization
 void Quadrotor::MotorInit(void)
 {
-  voltage = (float)analogRead(A14) * 0.020557;
+  voltage = (float)analogRead(A14) * 0.0191264;
   pinMode(MOTOR1, OUTPUT);
   pinMode(MOTOR2, OUTPUT);
   pinMode(MOTOR3, OUTPUT);
@@ -38,7 +38,7 @@ void Quadrotor::SensorInit(void)
   // Sensor calibration
   Serial.println("Sensor Calibration...");
   Serial.println("Place Quadrotor on level.");
-  delay(200);
+  delay(1000);
   // Accelerometer calibration
   Serial.println("If you enter 'a', the calibration will get started.");
   delay(3000);
@@ -525,12 +525,19 @@ void Quadrotor::ArmingState(void)
   {
     QuadrotorState = DISARMING_MODE;
   }
+  if (channel.CH6 > 1000)
+  {
+    QuadrotorState = DISARMING_MODE;
+    Serial.print(channel.CH6);
+    Serial.print(", ");
+    Serial.println(QuadrotorState);
+  }
 }
 
 // Checking Battery Voltage
 void Quadrotor::BatteryVoltageCheck(void)
 {
-  float v = (float)analogRead(A14) * 0.020557;
+  float v = (float)analogRead(A14) * 0.0191264;
   voltage = v * 0.005 + voltage * 0.995;
   voltage = Quadrotor::CONSTRAIN(voltage, 9.0, 17.0);
   if (voltage < 10.5)
@@ -639,7 +646,7 @@ void Quadrotor::Receiver(void)
       float psi_desired_degree = (channel.CH4 - 900) / 10;
       RCYawRate = psi_desired_degree * (PI / 180.0);
     }
-    RCYawRate = Quadrotor::CONSTRAIN(RCYawRate, -0.7, 0.7);
+    RCYawRate = Quadrotor::CONSTRAIN(RCYawRate, -1.5, 1.5);
   }
 }
 
@@ -664,58 +671,39 @@ void Quadrotor::AttitudeControl(void)
     Wq.output = 0;
     Wr.output = 0;
 
-    if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
+    if (QuadrotorState == ARMING_MODE)
     {
-      error.phi = Xdes.phi - X.phi;
-      Xdes.p = kpx * error.phi;
-
-      error.theta = Xdes.theta - X.theta;
-      Xdes.q = kpy * error.theta;
-
-      if (channel.CH5 > 1600) // HTC Vive Base Station
+      if (channel.CH3 > 320 || (channel.CH5 > 1600 && flight_mode == 1) || (channel.CH5 > 1600 && flight_mode == 2) || (channel.CH5 > 1600 && flight_mode == 3))
       {
-        // Already have a desired yaw rate
-      }
-      else
-      {
-        error.psi = Xdes.psi - X.psi;
-        (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
-        Xdes.r = kpz * error.psi;
-        Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -0.7, 0.7);
+        error.phi = Xdes.phi - X.phi;
+        Xdes.p = kpx * error.phi;
 
-        if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
+        error.theta = Xdes.theta - X.theta;
+        Xdes.q = kpy * error.theta;
+
+        if (channel.CH5 > 1600) // HTC Vive Base Station
         {
-          Xdes.r = RCYawRate;
-          Xdes.psi = X.psi;
+          // Already have a desired yaw rate
         }
-        if (channel.CH3 < 320)
+        else
         {
-          Xdes.psi = X.psi;
+          error.psi = Xdes.psi - X.psi;
+          (error.psi < -PI ? error.psi+(2*PI) : (error.psi > PI ? error.psi - (2*PI): error.psi));
+          Xdes.r = kpz * error.psi;
+          Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
+
+          if (RCYawRate >= 0.09 || RCYawRate <= -0.09)
+          {
+            Xdes.r = RCYawRate;
+            Xdes.psi = X.psi;
+          }
+          if (channel.CH3 < 320)
+          {
+            Xdes.psi = X.psi;
+          }
         }
       }
-
-      // Prefilter
-      Wp.input = Xdes.p;
-      Wp.output = (0.81 * Wp.output_prev1) + (0.09501 * Wp.input) + (0.09501 * Wp.input_prev1);
-      Wp.output = Quadrotor::CONSTRAIN(Wp.output, -4.4, 4.4);
-
-      // Prefilter
-      Wq.input = Xdes.q;
-      Wq.output = (0.81 * Wq.output_prev1) + (0.09501 * Wq.input) + (0.09501 * Wq.input_prev1);
-      Wq.output = Quadrotor::CONSTRAIN(Wq.output, -4.4, 4.4);
-
-      // Prefilter
-      Wr.input = Xdes.r;
-      Wr.output = (0.8768 * Wr.output_prev1) + (0.06158 * Wr.input) + (0.06158 * Wr.input_prev1);
-      Wr.output = Quadrotor::CONSTRAIN(Wr.output, -0.7, 0.7);
     }
-
-    Wp.output_prev1 = Wp.output;
-    Wp.input_prev1 = Wp.input;
-    Wq.output_prev1 = Wq.output;
-    Wq.input_prev1 = Wq.input;
-    Wr.output_prev1 = Wr.output;
-    Wr.input_prev1 = Wr.input;
   }
   Quadrotor::AngularRateControl();
 }
@@ -727,39 +715,37 @@ void Quadrotor::AngularRateControl(void)
   U2.current = 0;
   U3.current = 0;
   U4.current = 0;
-  if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
+  if (QuadrotorState == ARMING_MODE)
   {
-    if (control_method == 1) // Classical PID
+    if (channel.CH3 > 320 || (channel.CH5 > 1600 && flight_mode == 1) || (channel.CH5 > 1600 && flight_mode == 2) || (channel.CH5 > 1600 && flight_mode == 3))
     {
-      error.p = Xdes.p - X.p;
-      U2.current = error.p * kpPQRx + (error.p - error.p_prev1) * kdPQRx / dt;
-      error.p_prev1 = error.p;
-
-      error.q = Xdes.q - X.q;
-      U3.current = error.q * kpPQRy + (error.q - error.q_prev1) * kdPQRy / dt;
-      error.q_prev1 = error.q;
-
-      // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
-      // Base Station is ON
-      if (channel.CH5 > 1600)
+      if (control_method == 1) // Classical PID
       {
-        error.r = Xdes.r - X.r;
-        U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt;
-        error.r_prev1 = error.r;
-      }
-      else // Base Station is OFF
-      {
-        error.r = Xdes.r - X.r;
-        U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt;
-        error.r_prev1 = error.r;
+        error.p = Xdes.p - X.p;
+        U2.current = error.p * kpPQRx + (error.p - error.p_prev1) * kdPQRx / dt;
+        error.p_prev1 = error.p;
+
+        error.q = Xdes.q - X.q;
+        U3.current = error.q * kpPQRy + (error.q - error.q_prev1) * kdPQRy / dt;
+        error.q_prev1 = error.q;
+
+        // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
+        // Base Station is ON
+        if (channel.CH5 > 1600)
+        {
+          error.r = Xdes.r - X.r;
+          U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt;
+          error.r_prev1 = error.r;
+        }
+        else // Base Station is OFF
+        {
+          error.r = Xdes.r - X.r;
+          U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt;
+          error.r_prev1 = error.r;
+        }
       }
     }
   }
-
-  // U2.current = Quadrotor::CONSTRAIN(U2.current, -1, 1);
-  // U3.current = Quadrotor::CONSTRAIN(U3.current, -1, 1);
-  // U4.current = Quadrotor::CONSTRAIN(U4.current, -1, 1);
-
   error.p_prev1 = error.p;
   error.q_prev1 = error.q;
   error.r_prev1 = error.r;
@@ -785,12 +771,29 @@ void Quadrotor::DifferentialFlatness(void)
   {
     if (outerCounter >= 4)
     {
-      if (QuadrotorState == ARMING_MODE && channel.CH3 > 320)
+      if (QuadrotorState == ARMING_MODE)
       {
-        U1.current = Quadrotor::CONSTRAIN(U1.current, 0, 15);
-        Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
-        Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
-        Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
+        if (flight_mode == 1 || flight_mode == 2 || flight_mode == 3)
+        {
+          U1des.current = Quadrotor::CONSTRAIN(U1des.current, 0, 15);
+          Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
+          Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
+          Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
+
+          // Assign Thrust Here
+          U1.current = U1des.current;
+        }
+        else if (flight_mode == -1)
+        {
+          QuadrotorState = DISARMING_MODE;
+        }
+        else
+        {
+          U1.current = 0;
+          Xdes.phi = 0;
+          Xdes.theta = 0;
+          Xdes.r = 0;
+        }
       }
     }
   }
@@ -804,10 +807,10 @@ void Quadrotor::DifferentialFlatness(void)
 // Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::GenerateMotorCommands(void)
 {
-  omega1Squared = 130958.617 * U1.current - 1290232.68 * U2.current + 1728826.63 * U3.current + 10113268.61 * U4.current;
-  omega2Squared = 130958.617 * U1.current + 1290232.68 * U2.current - 1728826.63 * U3.current + 10113268.61 * U4.current;
-  omega3Squared = 130958.617 * U1.current + 1290232.68 * U2.current + 1728826.63 * U3.current - 10113268.61 * U4.current;
-  omega4Squared = 130958.617 * U1.current - 1290232.68 * U2.current - 1728826.63 * U3.current - 10113268.61 * U4.current;
+  omega1Squared = 130958.617 * U1.current - 1290232.68 * U2.current + 1728826.63 * U3.current + 5011326.61 * U4.current;
+  omega2Squared = 130958.617 * U1.current + 1290232.68 * U2.current - 1728826.63 * U3.current + 5011326.61 * U4.current;
+  omega3Squared = 130958.617 * U1.current + 1290232.68 * U2.current + 1728826.63 * U3.current - 5011326.61 * U4.current;
+  omega4Squared = 130958.617 * U1.current - 1290232.68 * U2.current - 1728826.63 * U3.current - 5011326.61 * U4.current;
   omega1Squared = Quadrotor::CONSTRAIN(omega1Squared, 0, 900000000);
   omega2Squared = Quadrotor::CONSTRAIN(omega2Squared, 0, 900000000);
   omega3Squared = Quadrotor::CONSTRAIN(omega3Squared, 0, 900000000);
@@ -837,7 +840,7 @@ void Quadrotor::GenerateMotorCommands(void)
     PWM3 = OFF_MOTOR_LEVEL;
     PWM4 = OFF_MOTOR_LEVEL;
   }
-  if (QuadrotorState == DISARMING_MODE || channel.CH6 > 1000)
+  if (QuadrotorState == DISARMING_MODE)
   {
     PWM1 = OFF_MOTOR_LEVEL;
     PWM2 = OFF_MOTOR_LEVEL;

@@ -26,6 +26,7 @@ public:
   ros::Subscriber sub;
   ros::Subscriber sub2;
   ros::Publisher pub;
+  ros::Publisher pub2;
   sensor_msgs::Imu imu;
   fame::fame_state state;
 
@@ -33,7 +34,7 @@ public:
   {
     sub = n.subscribe<sensor_msgs::Imu>("/fame_serial_imu", 1000, &fame_filter::callback, this);
     sub2 = n.subscribe<nav_msgs::Odometry>("/vive/LHR_FC64C5CA_odom", 1000, &fame_filter::callback2, this);
-    pub = n.advertise<fame::fame_state>("fame_filter_state", 1000);
+    pub = n.advertise<fame::fame_state>("fame_state", 1000);
   }
 
   ~fame_filter()
@@ -75,6 +76,7 @@ public:
     state.pose.orientation.x = myQuaternion.x();
     state.pose.orientation.y = myQuaternion.y();
     state.pose.orientation.z = myQuaternion.z();
+
 
     // Moving Average
     for (uint8_t j = 0; j < 13 ; j++)
@@ -148,8 +150,9 @@ public:
     state.pose.position.x = (state.pose.position.x + dtOuter * state.velocity.linear.x + 0.5 * dtOuter_2 * state.acceleration.linear.x) * CF_a + x * (1 - CF_a);
     state.pose.position.y = (state.pose.position.y + dtOuter * state.velocity.linear.y + 0.5 * dtOuter_2 * state.acceleration.linear.y) * CF_a + y * (1 - CF_a);
     state.pose.position.z = (state.pose.position.z + dtOuter * state.velocity.linear.z + 0.5 * dtOuter_2 * state.acceleration.linear.z) * CF_a + z * (1 - CF_a);
-    pub.publish(state);
 
+    // Publish
+    pub.publish(state);
   }
 
   float invSqrt(float number)
