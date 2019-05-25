@@ -40,6 +40,8 @@ public:
     desired.acceleration.linear.x = msg->acceleration.linear.x;
     desired.acceleration.linear.y = msg->acceleration.linear.y;
     desired.acceleration.linear.z = msg->acceleration.linear.z;
+    desired.attitude.z = msg->attitude.z;
+    desired.mode = msg->mode;
   }
 
   void callback2(const fame::fame_state::ConstPtr& msg)
@@ -67,11 +69,11 @@ public:
 
   void writeData(void)
   {
-    datafile << actual.mode << ", " << desired.pose.position.x << ", " << desired.pose.position.y
+    datafile << desired.mode << ", " << desired.pose.position.x << ", " << desired.pose.position.y
      << ", " << desired.pose.position.z << ", " << desired.velocity.linear.x
      << ", " << desired.velocity.linear.y << ", " << desired.velocity.linear.z
      << ", " << cmd.phi_des << ", " << cmd.theta_des << ", "
-     << cmd.r_des << ", " << actual.pose.position.x
+     << desired.attitude.z << ", " << actual.pose.position.x
      << ", " << actual.pose.position.y << ", " << actual.pose.position.z
      << ", " << actual.velocity.linear.x << ", " << actual.velocity.linear.y
      << ", " << actual.velocity.linear.z << ", " << actual.attitude.x << ", "

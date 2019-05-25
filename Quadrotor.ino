@@ -35,12 +35,17 @@ void loop()
   Quad.AttitudeControl();
   Quad.GenerateMotorCommands();
   Quad.LoopCounter();
+  Serial.print(Quad.Xdes.phi, 4);
+  Serial.print(", ");
+  Serial.print(Quad.X.phi, 4);
+  Serial.print(", ");
+  Serial.println(Quad.U2.current, 4);
 }
 
 void Teensy()
 {
-  Serial.begin(230400);
-  Serial1.begin(230400);
+  Serial.begin(115200);
+  Serial1.begin(115200);
   Radiolink.begin();
   pinMode(LEDRed, OUTPUT);
   pinMode(LEDGreen, OUTPUT);
@@ -52,6 +57,7 @@ void Teensy()
   Quad.channel.CH4 = 1000;
   Quad.channel.CH5 = 250;
   Quad.channel.CH6 = 250;
+  Quad.QuadrotorState = 0;
 }
 
 void Receiver()

@@ -33,7 +33,7 @@ public:
   fame_filter()
   {
     sub = n.subscribe<sensor_msgs::Imu>("/fame_serial_imu", 1000, &fame_filter::callback, this);
-    sub2 = n.subscribe<nav_msgs::Odometry>("/vive/LHR_FC64C5CA_odom", 1000, &fame_filter::callback2, this);
+    sub2 = n.subscribe<nav_msgs::Odometry>("/vive/LHR_AC094AF4_odom", 1000, &fame_filter::callback2, this);
     pub = n.advertise<fame::fame_state>("fame_state", 1000);
   }
 
@@ -151,6 +151,9 @@ public:
     state.pose.position.y = (state.pose.position.y + dtOuter * state.velocity.linear.y + 0.5 * dtOuter_2 * state.acceleration.linear.y) * CF_a + y * (1 - CF_a);
     state.pose.position.z = (state.pose.position.z + dtOuter * state.velocity.linear.z + 0.5 * dtOuter_2 * state.acceleration.linear.z) * CF_a + z * (1 - CF_a);
 
+    state.x_offset = x_offset;
+    state.y_offset = y_offset;
+    state.z_offset = z_offset;
     // Publish
     pub.publish(state);
   }

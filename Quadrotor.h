@@ -62,23 +62,23 @@
 #define dtMicroseconds 2500
 
 // Inner-loop PID parameters
-#define kpPQRx 0.095
-#define kdPQRx 0.00405
-#define kiPQRx 0
-#define kpPQRy 0.0976
-#define kdPQRy 0.00414
-#define kiPQRy 0
-#define kpPQRz 0.0155
-#define kdPQRz 0.0009
-#define kiPQRz 0
+#define kpPQRx 0.1
+#define kdPQRx 0.003
+#define kiPQRx 0.5
+#define kpPQRy 0.1
+#define kdPQRy 0.003
+#define kiPQRy 0.5
+#define kpPQRz 0.1
+#define kdPQRz 0.001
+#define kiPQRz 0.2
 // Outer-loop PID parameters
-#define kpx 10
+#define kpx 12
 #define kdx 0
 #define kix 0
-#define kpy 10
+#define kpy 12
 #define kdy 0
 #define kiy 0
-#define kpz 4.2
+#define kpz 9
 #define kdz 0
 #define kiz 0
 

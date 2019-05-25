@@ -133,21 +133,41 @@ add_executable(fame_serial src/fame_serial)
 target_link_libraries(fame_serial ${catkin_LIBRARIES})
 add_dependencies(fame_serial fame_generate_message_cpp)
 
+add_executable(fame_serial_2 src/fame_serial_2)
+target_link_libraries(fame_serial_2 ${catkin_LIBRARIES})
+add_dependencies(fame_serial_2 fame_generate_message_cpp)
+
 add_executable(fame_filter src/fame_filter)
 target_link_libraries(fame_filter ${catkin_LIBRARIES})
 add_dependencies(fame_filter fame_generate_message_cpp)
+
+add_executable(fame_filter_2 src/fame_filter_2)
+target_link_libraries(fame_filter_2 ${catkin_LIBRARIES})
+add_dependencies(fame_filter_2 fame_generate_message_cpp)
 
 add_executable(fame_trajectory_generation src/fame_trajectory_generation)
 target_link_libraries(fame_trajectory_generation ${catkin_LIBRARIES})
 add_dependencies(fame_trajectory_generation fame_generate_message_cpp)
 
+add_executable(fame_trajectory_generation_2 src/fame_trajectory_generation_2)
+target_link_libraries(fame_trajectory_generation_2 ${catkin_LIBRARIES})
+add_dependencies(fame_trajectory_generation_2 fame_generate_message_cpp)
+
 add_executable(fame_control src/fame_control)
 target_link_libraries(fame_control ${catkin_LIBRARIES})
 add_dependencies(fame_control fame_generate_message_cpp)
 
+add_executable(fame_control_2 src/fame_control_2)
+target_link_libraries(fame_control_2 ${catkin_LIBRARIES})
+add_dependencies(fame_control_2 fame_generate_message_cpp)
+
 add_executable(fame_log src/fame_log)
 target_link_libraries(fame_log ${catkin_LIBRARIES})
 add_dependencies(fame_log fame_generate_message_cpp)
+
+add_executable(fame_log_2 src/fame_log_2)
+target_link_libraries(fame_log_2 ${catkin_LIBRARIES})
+add_dependencies(fame_log_2 fame_generate_message_cpp)
 
 
 ## Add cmake target dependencies of the library

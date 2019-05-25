@@ -5,6 +5,10 @@
 #include "fame/fame_state.h"
 #include "fame/fame_msg.h"
 
+double error_xi = 0;
+double error_yi = 0;
+double error_zi = 0;
+double error_psii = 0;
 
 class fame_control
 {
@@ -69,20 +73,61 @@ public:
   void LQR(void)
   {
     // LQR Control
-    float error_x = state.pose.position.x - desired.pose.position.x;
-    float error_y = state.pose.position.y - desired.pose.position.y;
-    float error_z = state.pose.position.z - desired.pose.position.z;
-    float error_vx = state.velocity.linear.x - desired.velocity.linear.x;
-    float error_vy = state.velocity.linear.y - desired.velocity.linear.y;
-    float error_vz = state.velocity.linear.z - desired.velocity.linear.z;
-    float error_psi = state.attitude.z - desired.attitude.z;
+    float error_x = desired.pose.position.x - state.pose.position.x;
+    float error_y = desired.pose.position.y - state.pose.position.y;
+    float error_z = desired.pose.position.z - state.pose.position.z;
+    float error_vx = desired.velocity.linear.x - state.velocity.linear.x;
+    float error_vy = desired.velocity.linear.y - state.velocity.linear.y;
+    float error_vz = desired.velocity.linear.z - state.velocity.linear.z;
+    float error_psi = desired.attitude.z - state.attitude.z;
 
-    float g1 = 3.1623, g2 = 4.0404;
+    // Integration
+    error_xi += error_x * 0.01;
+    error_yi += error_y * 0.01;
+    error_zi += error_z * 0.01;
+    error_psii += error_psii * 0.01;
+
+    float g1 = 4.6, g2 = 3.74, g3 =  4.6;
     float u1, u2, u3, u4;
-    u1 = -g1 * error_x - g2 * error_vx;
-    u2 = -g1 * error_y - g2 * error_vy;
-    u3 = -g1 * error_z - g2 * error_vz;
-    u4 = -g1 * error_psi;
+    u1 = g1 * error_x + g2 * error_vx + g3 * error_xi;
+    u2 = g1 * error_y + g2 * error_vy + g3 * error_yi;
+    u3 = g1 * error_z + g2 * error_vz + g3 * error_zi;
+    u4 = g1 * error_psi + g3 * error_psii;
+
+    // Anti-Windup
+    double saturated_u1 = CONSTRAIN(u1, -4, 4);
+    double saturated_u2 = CONSTRAIN(u2, -4, 4);
+    double saturated_u3 = CONSTRAIN(u3, -5, 5);
+    double saturated_u4 = CONSTRAIN(u4, -4, 4);
+    int clamp_x = antiWindup(error_x, u1, saturated_u1);
+    int clamp_y = antiWindup(error_y, u2, saturated_u2);
+    int clamp_z = antiWindup(error_z, u3, saturated_u3);
+    int clamp_psi = antiWindup(error_psi, u4, saturated_u4);
+
+    if (clamp_x == 1)
+    {
+      // integral part is set to zero
+      error_xi = 0;
+      u1 = g1 * error_x + g2 * error_vx;
+    }
+    if (clamp_y == 1)
+    {
+      // integral part is set to zero
+      error_yi = 0;
+      u2 = g1 * error_y + g2 * error_vy;
+    }
+    if (clamp_z == 1)
+    {
+      // integral part is set to zero
+      error_zi = 0;
+      u3 = g1 * error_z + g2 * error_vz;
+    }
+    if (clamp_psi == 1)
+    {
+      // integral part is set to zero
+      error_psii = 0;
+      u4 = g1 * error_psi;
+    }
 
     // Feedforward
     float up_1, up_2, up_3, up_psi;
@@ -116,38 +161,22 @@ public:
 
   int antiWindup(float error, float output, float saturatedOutput)
   {
-    int check1, check2, clamp;
-    int sign1;
-    int sign2;
+    int check1 = 0;
+    int check2 = 0;
+    int clamp = 0;
 
-    if (output == saturatedOutput)
-    {
-      check1 = 0;
-    }
-    else
+    // Check 1
+    if (output != saturatedOutput)
     {
       check1 = 1;
     }
-
-    if (output >= 0)
-    {
-      sign1 = 1;
-    }
     else
     {
-      sign1 = 0;
+      check1 = 0;
     }
 
-    if (error >= 0)
-    {
-      sign2 = 1;
-    }
-    else
-    {
-      sign2 = 0;
-    }
-
-    if (sign1 == sign2)
+    // Check 2
+    if (sign(error) != sign(output))
     {
       check2 = 1;
     }
@@ -156,8 +185,23 @@ public:
       check2 = 0;
     }
 
-    clamp = check1 * check2;
+    // Check 3
+    if ((check1 * check2) == 1)
+    {
+      clamp = 1;
+    }
+    else
+    {
+      clamp = 0;
+    }
     return clamp;
+  }
+
+  int sign(float num)
+  {
+    if (num > 0) return 1;
+    if (num < 0) return -1;
+    return 0;
   }
 
   double CONSTRAIN(double x, double min, double max)

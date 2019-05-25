@@ -56,6 +56,7 @@ public:
     actual.attitude.x = msg->attitude.x;
     actual.attitude.y = msg->attitude.y;
     actual.attitude.z = msg->attitude.z;
+    actual.mode = msg->mode; 
   }
 
   void callback3(const fame::fame_msg::ConstPtr& msg)
@@ -67,7 +68,7 @@ public:
 
   void writeData(void)
   {
-    datafile << desired.pose.position.x << ", " << desired.pose.position.y
+    datafile << actual.mode << ", " << desired.pose.position.x << ", " << desired.pose.position.y
      << ", " << desired.pose.position.z << ", " << desired.velocity.linear.x
      << ", " << desired.velocity.linear.y << ", " << desired.velocity.linear.z
      << ", " << cmd.phi_des << ", " << cmd.theta_des << ", "
@@ -81,7 +82,7 @@ public:
 
 int main(int argc, char **argv)
 {
-  datafile.open("/home/smanne1/catkin_ws/src/fame/data.txt");
+  datafile.open("/home/smanne1/catkin_ws/src/fame/vehicle1_data.txt");
   ros::init(argc, argv, "fame_log");
   fame_log fame;
 
@@ -90,7 +91,7 @@ int main(int argc, char **argv)
 
   if (datafile.is_open())
   {
-    datafile << "xdes" << ", " << "ydes" << ", " << "zdes" << ", "
+    datafile << "mode" << ", " << "xdes" << ", " << "ydes" << ", " << "zdes" << ", "
     << "vxdes" << ", " << "vydes" << ", " << "vzdes" << ", "
     << "phides" << ", " << "thetades" << ", " << "psides" << ", "
     << "x" << ", " << "y" << ", " << "z" << ", " << "vx" << ", "

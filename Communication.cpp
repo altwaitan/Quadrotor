@@ -7,8 +7,8 @@ void Communication::ROS_Send(Quadrotor *quadrotor)
     uint8_t buf[MAVLINK_MAX_PACKET_LEN];
     uint32_t time_mav = micros();
     mavlink_msg_raw_imu_pack(1, 1, &mav_msg, time_mav,
-      quadrotor->accel.filtered.x, quadrotor->accel.filtered.y, quadrotor->accel.filtered.z,
-      quadrotor->X.p, quadrotor->X.q, quadrotor->X.r, 0.0, 0.0, 0.0);
+      quadrotor->accel.filtered.x*1000, quadrotor->accel.filtered.y*1000, quadrotor->accel.filtered.z*1000,
+      quadrotor->X.p*1000, quadrotor->X.q*1000, quadrotor->X.r*1000, quadrotor->X.phi*1000, quadrotor->X.theta*1000, quadrotor->voltage*1000);
     len = mavlink_msg_to_send_buffer(buf, &mav_msg);
     Serial1.write(buf, len);
 }
@@ -42,6 +42,8 @@ void Communication::ROS_Receive(Quadrotor *quadrotor)
           CommunicationState.theta = des.pitch_speed; // We are sending pitch angle (rad) NOT body_pitch_rate
           CommunicationState.r = des.yaw_speed;
           CommunicationState.mode = des.time_boot_ms;
+          quadrotor->flight_mode = CommunicationState.mode;
+          Serial.println(CommunicationState.thrust);
 
           if (quadrotor->channel.CH5 > 1600)
           {
@@ -49,12 +51,11 @@ void Communication::ROS_Receive(Quadrotor *quadrotor)
             quadrotor->Xdes.phi = CommunicationState.phi;
             quadrotor->Xdes.theta = CommunicationState.theta;
             quadrotor->Xdes.r = CommunicationState.r;
-            quadrotor->flight_mode = CommunicationState.mode;
 
             quadrotor->U1des.current = quadrotor->CONSTRAIN(quadrotor->U1des.current, 0, 15);
-            quadrotor->Xdes.phi = quadrotor->CONSTRAIN(quadrotor->Xdes.phi, -0.35, 0.35);
-            quadrotor->Xdes.theta = quadrotor->CONSTRAIN(quadrotor->Xdes.theta, -0.35, 0.35);
-            quadrotor->Xdes.r = quadrotor->CONSTRAIN(quadrotor->Xdes.r, -1, 1);
+            quadrotor->Xdes.phi = quadrotor->CONSTRAIN(quadrotor->Xdes.phi, -1.0, 1.0);
+            quadrotor->Xdes.theta = quadrotor->CONSTRAIN(quadrotor->Xdes.theta, -1.0, 1.0);
+            quadrotor->Xdes.r = quadrotor->CONSTRAIN(quadrotor->Xdes.r, -2, 2);
 
           }
       }

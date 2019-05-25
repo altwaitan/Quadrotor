@@ -3,7 +3,7 @@
 // Motor initialization
 void Quadrotor::MotorInit(void)
 {
-  voltage = (float)analogRead(A14) * 0.0191264;
+  voltage = (float)analogRead(A14) * 0.019586;
   pinMode(MOTOR1, OUTPUT);
   pinMode(MOTOR2, OUTPUT);
   pinMode(MOTOR3, OUTPUT);
@@ -97,6 +97,11 @@ void Quadrotor::SensorInit(void)
 
   Quadrotor::AccelOffsetRead();
   accel_calibration_done = 1;
+  while (gyro_calibration_done == 0 && gyro_calibration_counter <= 1500)
+  {
+    gyro_calibration_counter++;
+    GyroCalibration();
+  }
   Serial.println("Sensor Calibration... Done!");
 }
 
@@ -125,12 +130,6 @@ void Quadrotor::IMUread(void)
   gyro.calibrated.x = (gyro.raw.x - gyro.tempOffset.x);
   gyro.calibrated.y = (gyro.raw.y - gyro.tempOffset.y);
   gyro.calibrated.z = (gyro.raw.z - gyro.tempOffset.z);
-
-  if (gyro_calibration_done == 0 && gyro_calibration_counter <= 1500)
-  {
-    gyro_calibration_counter++;
-    GyroCalibration();
-  }
 
   if (gyro_calibration_done == 1)
   {
@@ -528,16 +527,13 @@ void Quadrotor::ArmingState(void)
   if (channel.CH6 > 1000)
   {
     QuadrotorState = DISARMING_MODE;
-    Serial.print(channel.CH6);
-    Serial.print(", ");
-    Serial.println(QuadrotorState);
   }
 }
 
 // Checking Battery Voltage
 void Quadrotor::BatteryVoltageCheck(void)
 {
-  float v = (float)analogRead(A14) * 0.0191264;
+  float v = (float)analogRead(A14) * 0.019586;
   voltage = v * 0.005 + voltage * 0.995;
   voltage = Quadrotor::CONSTRAIN(voltage, 9.0, 17.0);
   if (voltage < 10.5)
@@ -612,28 +608,28 @@ void Quadrotor::Receiver(void)
     Xdes.phi = 0;
     if (channel.CH1 > 1100)
     {
-      float phi_desired_degree = (channel.CH1 - 1100) / 40;
+      float phi_desired_degree = (channel.CH1 - 1100) / 30;
       Xdes.phi = phi_desired_degree * (PI / 180.0);
     }
     else if (channel.CH1 < 900)
     {
-      float phi_desired_degree = (channel.CH1 - 900) / 40;
+      float phi_desired_degree = (channel.CH1 - 900) / 30;
       Xdes.phi = phi_desired_degree * (PI / 180.0);
     }
-    Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
+    Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.6, 0.6);
 
     Xdes.theta = 0;
     if (channel.CH2 > 1100)
     {
-      float theta_desired_degree = (channel.CH2 - 1100) / 40;
+      float theta_desired_degree = (channel.CH2 - 1100) / 30;
       Xdes.theta = theta_desired_degree * (PI / 180.0);
     }
     else if (channel.CH2 < 900)
     {
-      float theta_desired_degree = (channel.CH2 - 900) / 40;
+      float theta_desired_degree = (channel.CH2 - 900) / 30;
       Xdes.theta = theta_desired_degree * (PI / 180.0);
     }
-    Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
+    Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.6, 0.6);
 
     RCYawRate = 0;
     if (channel.CH4 > 1100)
@@ -678,8 +674,18 @@ void Quadrotor::AttitudeControl(void)
         error.phi = Xdes.phi - X.phi;
         Xdes.p = kpx * error.phi;
 
+        // Prefilter
+        Wp.input = Xdes.p;
+        Wp.output = (0.8391 * Wp.output_prev1) + (0.08045 * Wp.input) + (0.08045 * Wp.input_prev1);
+        Wp.output = Quadrotor::CONSTRAIN(Wp.output, -6.28, 6.28);
+
         error.theta = Xdes.theta - X.theta;
         Xdes.q = kpy * error.theta;
+
+        // Prefilter
+        Wq.input = Xdes.q;
+        Wq.output = (0.8391 * Wq.output_prev1) + (0.08045 * Wq.input) + (0.08045 * Wq.input_prev1);
+        Wq.output = Quadrotor::CONSTRAIN(Wq.output, -6.28, 6.28);
 
         if (channel.CH5 > 1600) // HTC Vive Base Station
         {
@@ -704,6 +710,10 @@ void Quadrotor::AttitudeControl(void)
         }
       }
     }
+    Wp.output_prev1 = Wp.output;
+    Wp.input_prev1 = Wp.input;
+    Wq.output_prev1 = Wq.output;
+    Wq.input_prev1 = Wq.input;
   }
   Quadrotor::AngularRateControl();
 }
@@ -719,14 +729,18 @@ void Quadrotor::AngularRateControl(void)
   {
     if (channel.CH3 > 320 || (channel.CH5 > 1600 && flight_mode == 1) || (channel.CH5 > 1600 && flight_mode == 2) || (channel.CH5 > 1600 && flight_mode == 3))
     {
-      if (control_method == 1) // Classical PID
+      if (control_method == 1) // PID with No prefilter
       {
         error.p = Xdes.p - X.p;
-        U2.current = error.p * kpPQRx + (error.p - error.p_prev1) * kdPQRx / dt;
+        error.p_integral += error.p * dt;
+        error.p_integral = Quadrotor::CONSTRAIN(error.p_integral, -1, 1);
+        U2.current = error.p * kpPQRx + (error.p - error.p_prev1) * kdPQRx / dt + error.p_integral * kiPQRx;
         error.p_prev1 = error.p;
 
         error.q = Xdes.q - X.q;
-        U3.current = error.q * kpPQRy + (error.q - error.q_prev1) * kdPQRy / dt;
+        error.q_integral += error.q * dt;
+        error.q_integral = Quadrotor::CONSTRAIN(error.q_integral, -1, 1);
+        U3.current = error.q * kpPQRy + (error.q - error.q_prev1) * kdPQRy / dt + error.q_integral * kiPQRy;
         error.q_prev1 = error.q;
 
         // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
@@ -740,7 +754,40 @@ void Quadrotor::AngularRateControl(void)
         else // Base Station is OFF
         {
           error.r = Xdes.r - X.r;
+          error.r_integral += error.r * dt;
+          error.r_integral = Quadrotor::CONSTRAIN(error.r_integral, -1, 1);
+          U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt + error.r_integral * kiPQRz;
+          error.r_prev1 = error.r;
+        }
+      }
+      else if (control_method == 2) // PID with prefilter
+      {
+        error.p = Wp.output - X.p;
+        error.p_integral += error.p * dt;
+        error.p_integral = Quadrotor::CONSTRAIN(error.p_integral, -1, 1);
+        U2.current = error.p * kpPQRx + (error.p - error.p_prev1) * kdPQRx / dt + error.p_integral * kiPQRx;
+        error.p_prev1 = error.p;
+
+        error.q = Wq.output - X.q;
+        error.q_integral += error.q * dt;
+        error.q_integral = Quadrotor::CONSTRAIN(error.q_integral, -1, 1);
+        U3.current = error.q * kpPQRy + (error.q - error.q_prev1) * kdPQRy / dt + error.q_integral * kiPQRy;
+        error.q_prev1 = error.q;
+
+        // Note: Using Radio Control (RC) we control the yaw angular rate (NOT yaw angle)
+        // Base Station is ON
+        if (channel.CH5 > 1600)
+        {
+          error.r = Xdes.r - X.r;
           U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt;
+          error.r_prev1 = error.r;
+        }
+        else // Base Station is OFF
+        {
+          error.r = Xdes.r - X.r;
+          error.r_integral += error.r * dt;
+          error.r_integral = Quadrotor::CONSTRAIN(error.r_integral, -1, 1);
+          U4.current = error.r * kpPQRz + (error.r - error.r_prev1) * kdPQRz / dt + error.r_integral * kiPQRz;
           error.r_prev1 = error.r;
         }
       }
@@ -776,9 +823,9 @@ void Quadrotor::DifferentialFlatness(void)
         if (flight_mode == 1 || flight_mode == 2 || flight_mode == 3)
         {
           U1des.current = Quadrotor::CONSTRAIN(U1des.current, 0, 15);
-          Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.35, 0.35);
-          Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.35, 0.35);
-          Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -1, 1);
+          Xdes.phi = Quadrotor::CONSTRAIN(Xdes.phi, -0.6, 0.6);
+          Xdes.theta = Quadrotor::CONSTRAIN(Xdes.theta, -0.6, 0.6);
+          Xdes.r = Quadrotor::CONSTRAIN(Xdes.r, -2, 2);
 
           // Assign Thrust Here
           U1.current = U1des.current;
@@ -807,10 +854,10 @@ void Quadrotor::DifferentialFlatness(void)
 // Shi Lu (https://github.com/ragewrath/Mark3-Copter-Pilot)
 void Quadrotor::GenerateMotorCommands(void)
 {
-  omega1Squared = 130958.617 * U1.current - 1290232.68 * U2.current + 1728826.63 * U3.current + 5011326.61 * U4.current;
-  omega2Squared = 130958.617 * U1.current + 1290232.68 * U2.current - 1728826.63 * U3.current + 5011326.61 * U4.current;
-  omega3Squared = 130958.617 * U1.current + 1290232.68 * U2.current + 1728826.63 * U3.current - 5011326.61 * U4.current;
-  omega4Squared = 130958.617 * U1.current - 1290232.68 * U2.current - 1728826.63 * U3.current - 5011326.61 * U4.current;
+  omega1Squared = 130958.617 * U1.current - 1290232.68 * U2.current + 1290232.68 * U3.current + 1290232.68 * U4.current;
+  omega2Squared = 130958.617 * U1.current + 1290232.68 * U2.current - 1290232.68 * U3.current + 1290232.68 * U4.current;
+  omega3Squared = 130958.617 * U1.current + 1290232.68 * U2.current + 1290232.68 * U3.current - 1290232.68 * U4.current;
+  omega4Squared = 130958.617 * U1.current - 1290232.68 * U2.current - 1290232.68 * U3.current - 1290232.68 * U4.current;
   omega1Squared = Quadrotor::CONSTRAIN(omega1Squared, 0, 900000000);
   omega2Squared = Quadrotor::CONSTRAIN(omega2Squared, 0, 900000000);
   omega3Squared = Quadrotor::CONSTRAIN(omega3Squared, 0, 900000000);
