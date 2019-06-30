@@ -1,0 +1,12 @@
+<launch>
+  <node pkg="quad" type="quad_serial" name="quad_serial" />
+  <node pkg="quad" type="quad_serial_2" name="quad_serial_2" />
+  <node pkg="quad" type="quad_state" name="quad_state" />
+  <node pkg="quad" type="quad_state_2" name="quad_state_2" />
+  <node pkg="quad" type="quad_trajectory_generation" name="quad_trajectory_generation" />
+  <node pkg="quad" type="quad_trajectory_generation_2" name="quad_trajectory_generation_2" />
+  <node pkg="quad" type="quad_control" name="quad_control" />
+  <node pkg="quad" type="quad_control_2" name="quad_control_2" />
+  <node pkg="quad" type="quad_log" name="quad_log" />
+  <node pkg="quad" type="quad_log_2" name="quad_log_2" />
+</launch>
